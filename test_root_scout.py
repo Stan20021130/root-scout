@@ -1994,6 +1994,19 @@ class V2DiscoveryTests(unittest.TestCase):
         self.assertEqual(root_scout.v2_site_check(candidate(["line 99"]),source),"out_of_range")
         self.assertEqual(root_scout.v2_location_spans(["lines 20-25","line 3","see line 7"]),[(20,25),(3,3),(7,7)])
 
+    def test_v2_site_check_flags_a_function_wide_range_as_coarse(self):
+        source="\n".join(f"x{i} = {i};" for i in range(1,60))
+        candidate=lambda locations: {"source_location_claims":locations}
+        limit=root_scout.V2_SITE_MAX_LINES
+        self.assertEqual(root_scout.v2_site_check(candidate([f"lines 1-{limit}"]),source),"ok")
+        self.assertEqual(root_scout.v2_site_check(candidate([f"lines 1-{limit+1}"]),source),"coarse_site")
+        # one precise span next to a coarse one is still a usable pointer
+        self.assertEqual(root_scout.v2_site_check(candidate(["lines 1-40","lines 7-7"]),source),"ok")
+        coarse={"candidates":[{"id":"C0001","lifecycle":"open","candidate_kind":"defect_candidate","current_claim":"x",
+                               "current_evidence_ids":[],"source_location_claims":["lines 1-40"]}],
+                "evidence":[],"tool_actions":[],"request_snapshot":{"source":source}}
+        self.assertEqual(root_scout.v2_localization(coarse)["status"],"located_coarse_line")
+
     def test_v2_localization_states_what_a_reader_gets(self):
         empty={"candidates":[],"evidence":[],"tool_actions":[],"request_snapshot":{"source":"a=1\n"}}
         self.assertEqual(root_scout.v2_localization(empty)["status"],"no_finding")
@@ -2006,7 +2019,8 @@ class V2DiscoveryTests(unittest.TestCase):
     def test_v2_prompt_asks_for_a_line_range_and_for_merging_restatements(self):
         text=root_scout.system_for_phase("EXPLORE_V2",prompt_profile="baseline")
         self.assertIn("must name the line range it lives on",text)
-        self.assertIn("must be merged into that candidate",text)
+        self.assertIn("give the shortest range that still covers the change",text)
+        self.assertIn("merge a later restatement of a site you already hold",text)
 
     def test_v2_missing_action_kind_is_inferred_when_one_spec_fits(self):
         response={"candidates":[{"ref":"candidate","claim":"There may be an initialization issue."}],"updates":[],

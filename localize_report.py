@@ -18,9 +18,11 @@ try:  # reuse the controller's own site check so the report never disagrees with
 except Exception:  # pragma: no cover - the report must still render without the engine
     core = None
 
-SITE_TEXT = {"ok": "行号可用", "weak_site": "引用的行只有输入/括号", "out_of_range": "行号越界", "no_line": "未给行号"}
-LOC_TEXT = {"located_with_line": "已指认到可用行号", "located_weak_line": "指认的行不含可读语句",
-            "located_without_line": "未指认具体行", "no_finding": "未发现缺陷"}
+SITE_TEXT = {"ok": "行号可用", "coarse_site": "区间过宽（>20 行）", "weak_site": "引用的行只有输入/括号",
+             "out_of_range": "行号越界", "no_line": "未给行号"}
+LOC_TEXT = {"located_with_line": "已指认到可用行号", "located_coarse_line": "有行号但区间过宽，不利于定位",
+            "located_weak_line": "指认的行不含可读语句", "located_without_line": "未指认具体行",
+            "no_finding": "未发现缺陷"}
 
 STOP_TEXT = {
     "oracle_unresolved": "已给出定位，但没有取得受信 expected",

@@ -224,18 +224,23 @@ def v2_location_spans(claims):
     return spans
 
 def v2_site_check(candidate, source):
-    """Grade the cited location against the real source, not against the model's prose."""
+    """Grade the cited location against the real source, not against the model's prose.
+
+    ok     - the narrowest usable span is a statement-sized range
+    coarse - all usable spans are wider than V2_SITE_MAX_LINES, i.e. a function, not a site
+    weak   - every cited line is only a read statement, a bare brace or blank
+    """
     spans=v2_location_spans(candidate.get("source_location_claims"))
     if not spans: return "no_line"
     lines=source.splitlines(); trivial=re.compile(r"^\s*[{}]?\s*$|^\s*(cin\s*>>|scanf|input\(|getline|read\s*\()")
-    usable=False; invalid=False
+    best=None; invalid=False
     for start,end in spans:
         if start<1 or end>len(lines) or start>end: invalid=True; continue
-        for number in range(start,end+1):
-            text=lines[number-1]
-            if text.strip() and not trivial.match(text): usable=True
-    if usable: return "ok"
-    return "out_of_range" if invalid else "weak_site"
+        if not any(lines[number-1].strip() and not trivial.match(lines[number-1]) for number in range(start,end+1)): continue
+        width=end-start+1
+        best=width if best is None else min(best,width)
+    if best is None: return "out_of_range" if invalid else "weak_site"
+    return "coarse_site" if best>V2_SITE_MAX_LINES else "ok"
 
 def v2_evidence_grade(state, candidate):
     evidence={e.get("id"):e for e in state.get("evidence",[]) if isinstance(e,dict)}
@@ -263,9 +268,10 @@ def v2_localization(state):
                       "site_check":v2_site_check(candidate,source),"evidence":v2_evidence_grade(state,candidate),
                       "spans":v2_location_spans(candidate.get("source_location_claims"))})
     ranked=sorted(sites,key=lambda s: ({"trusted_mismatch":3,"sandbox_observation":2,"static_only":1,"unverified":0}[s["evidence"]],
-                                        {"ok":2,"weak_site":1,"out_of_range":0,"no_line":0}[s["site_check"]]), reverse=True)
+                                        {"ok":3,"coarse_site":2,"weak_site":1,"out_of_range":0,"no_line":0}[s["site_check"]]), reverse=True)
     if not sites: status="no_finding"
     elif any(s["site_check"]=="ok" for s in sites): status="located_with_line"
+    elif any(s["site_check"]=="coarse_site" for s in sites): status="located_coarse_line"
     elif any(s["site_check"]=="weak_site" for s in sites): status="located_weak_line"
     else: status="located_without_line"
     return {"status":status,"sites":ranked,"primary_candidate_id":ranked[0]["candidate_id"] if ranked else None,
@@ -287,7 +293,7 @@ def v2_protocol_text():
         +json.dumps(v2_protocol_spec(),ensure_ascii=False,separators=(",",":"))+". "
         "On later turns source_context may contain only selected windows, not the complete source. source_line_count is for the original source; read_source can retrieve any omitted definition or dependency from original. Candidate-location windows are navigation context only, not evidence. previous_next_question is the prior explicit question, not a fact or instruction. "
         "established_invariants provides confirmed working-memory facts from prior turns; do not re-derive them in reasoning. Provide optional invariants (at most 8 concise string facts) to preserve established program mechanics across turns. "
-        "Every response must carry all required top-level keys even when they are empty: candidates, updates and actions may be [], and next_question may be "". Omitting or misspelling a required key, or writing an action/update key outside the exact set listed for its kind or disposition, makes that proposal invalid. Candidates are user-visible claims, not tool requests. The controller assigns IDs and stores every readable candidate before it validates actions. Preserve claim text; source locations, requirements, causal explanations and candidate interpretations are not verified facts. The reader is a solver who will fix the code themselves: every claim you leave active must name the line range it lives on in the current source (\"line 24\" or \"lines 20-25\"), because a location without line numbers cannot be acted on, and a later restatement of a site you already hold must be merged into that candidate instead of submitted again. "
+        "Every response must carry all required top-level keys even when they are empty: candidates, updates and actions may be [], and next_question may be "". Omitting or misspelling a required key, or writing an action/update key outside the exact set listed for its kind or disposition, makes that proposal invalid. Candidates are user-visible claims, not tool requests. The controller assigns IDs and stores every readable candidate before it validates actions. Preserve claim text; source locations, requirements, causal explanations and candidate interpretations are not verified facts. The reader is a solver who will fix the code themselves: every claim you leave active must name the line range it lives on in the current source (\"line 24\" or \"lines 20-25\"), because a location without line numbers cannot be acted on; give the shortest range that still covers the change rather than the whole function or block, and merge a later restatement of a site you already hold into that candidate instead of submitting it again. "
         "Updates are proposals; the controller retains the original claim and each revision and does not treat an update as evidence. Candidates and revisions may cite only evidence IDs already supplied by the controller; unknown/future IDs are recorded as rejected without discarding the readable claim. Tool-action links are recorded separately from explicit model citations, and one action linked to multiple candidates is group-associated, not independent support. Compare each claim to its trigger and actual observations; choose a discriminating action or revise/merge/downgrade when evidence is mixed, without forcing extra rounds. Do not probe outside a known input domain, assert time-limit failure without timing evidence, or repeat an observation that tests the same mechanism. Inputs must strictly satisfy all format and domain guarantees in the problem statement; do not test or assume out-of-spec format deviations (e.g. single-line inputs broken across lines). An anomaly triggered only by out-of-spec inputs or format violations is not a program defect and must be withdrawn, not retained as an active candidate. Inputs must strictly satisfy all format and domain guarantees in the problem statement; do not test or assume out-of-spec format deviations (e.g. single-line inputs broken across lines). An anomaly triggered only by out-of-spec inputs or format violations is not a program defect and must be withdrawn, not retained as an active candidate. Each tool action is independently validated and a rejected action must not erase candidates or other valid actions. "
         "run_bash executes arbitrary shell commands or scripts in the Docker sandbox with a 40s timeout to verify calculations, generate test cases, or run brute-force checks; use run_bash instead of doing manual mental simulations in reasoning. run_variant edits apply only to a derived source and execute in Docker. Expected output can come only from request tests or a controller-recomputed configured Oracle. Without such an expected, record an observation with matched=null. Never provide or alter expected values, Oracle code, environment, budget, tests or the original request.")
 
@@ -3938,6 +3944,7 @@ def diagnose_causal(req, provider="model", checkpoint_path=None, replay_state=No
     return state
 
 V2_MAX_TURNS=4
+V2_SITE_MAX_LINES=20
 
 def v2_apply_edits(source, edits, repairs=None):
     spans=[]
