@@ -19,7 +19,7 @@ except Exception:  # pragma: no cover - the report must still render without the
     core = None
 
 SITE_TEXT = {"ok": "行号可用", "coarse_site": "区间过宽（>20 行）", "weak_site": "引用的行只有输入/括号",
-             "out_of_range": "行号越界", "no_line": "未给行号"}
+             "ambiguous_quote": "引用在源码里出现多次", "out_of_range": "行号越界", "no_line": "未给位置"}
 LOC_TEXT = {"located_with_line": "已指认到可用行号", "located_coarse_line": "有行号但区间过宽，不利于定位",
             "located_weak_line": "指认的行不含可读语句", "located_without_line": "未指认具体行",
             "no_finding": "未发现缺陷"}
@@ -58,7 +58,9 @@ def parse_location(claim):
     return numbers
 
 
-def spans_of(candidate):
+def spans_of(candidate, source=""):
+    if core is not None:
+        return core.v2_resolve_locations(candidate.get("source_location_claims"), source)["spans"]
     spans = []
     for claim in candidate.get("source_location_claims") or []:
         spans.extend(parse_location(claim))
@@ -117,7 +119,7 @@ def report(case_id):
     # because a solver reads locations, not claim wording
     groups = []
     for cand in active:
-        spans = spans_of(cand)
+        spans = spans_of(cand, source)
         for group in groups:
             if spans and group["spans"] and overlaps(spans, group["spans"]):
                 group["members"].append(cand)

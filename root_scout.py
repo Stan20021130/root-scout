@@ -223,15 +223,56 @@ def v2_location_spans(claims):
             spans.append((start,end))
     return spans
 
+def v2_quoted_fragments(claims):
+    quotes=[]
+    for claim in claims or []:
+        if not isinstance(claim,str): continue
+        quotes.extend(re.findall(r"`([^`]+)`",claim))
+    return quotes
+
+def v2_quote_span(source, quote, near=None):
+    """Map a quoted source passage to a line range by exact line-wise match.
+
+    Quoting is cheaper and safer than counting lines: the model already holds the source
+    text, while producing a line number costs an extra read_source turn. Returns
+    (span, hit_count); a quote that occurs more than once is ambiguous unless `near` picks one.
+    """
+    lines=[line.strip() for line in (source or "").splitlines()]
+    wanted=[line.strip() for line in (quote or "").split("\n") if line.strip()]
+    if not wanted or not lines: return None, 0
+    hits=[]
+    for start in range(len(lines)):
+        if lines[start]!=wanted[0]: continue
+        if all(start+offset<len(lines) and lines[start+offset]==wanted[offset] for offset in range(len(wanted))):
+            hits.append((start+1,start+len(wanted)))
+    if len(hits)==1: return hits[0], 1
+    if len(hits)>1 and near is not None:
+        hits.sort(key=lambda span: abs(span[0]-near))
+        return hits[0], len(hits)
+    return None, len(hits)
+
+def v2_resolve_locations(claims, source=None):
+    spans=v2_location_spans(claims); resolved=[]; ambiguous=[]
+    if source:
+        near=spans[0][0] if spans else None
+        for quote in v2_quoted_fragments(claims):
+            span,count=v2_quote_span(source,quote,near)
+            if span: spans.append(span); resolved.append(quote)
+            elif count>1: ambiguous.append(quote)
+    return {"spans":sorted(spans),"quotes_resolved":resolved,"quotes_ambiguous":ambiguous}
+
 def v2_site_check(candidate, source):
     """Grade the cited location against the real source, not against the model's prose.
 
-    ok     - the narrowest usable span is a statement-sized range
-    coarse - all usable spans are wider than V2_SITE_MAX_LINES, i.e. a function, not a site
-    weak   - every cited line is only a read statement, a bare brace or blank
+    A location may be a line range or a quoted passage; the quote is resolved against the
+    current source before grading, so a model never has to count lines.
+    ok      - the narrowest usable span is a statement-sized range
+    coarse  - all usable spans are wider than V2_SITE_MAX_LINES, i.e. a function, not a site
+    weak    - every cited line is only a read statement, a bare brace or blank
     """
-    spans=v2_location_spans(candidate.get("source_location_claims"))
-    if not spans: return "no_line"
+    located=v2_resolve_locations(candidate.get("source_location_claims"),source)
+    spans=located["spans"]
+    if not spans: return "ambiguous_quote" if located["quotes_ambiguous"] else "no_line"
     lines=source.splitlines(); trivial=re.compile(r"^\s*[{}]?\s*$|^\s*(cin\s*>>|scanf|input\(|getline|read\s*\()")
     best=None; invalid=False
     for start,end in spans:
@@ -264,11 +305,13 @@ def v2_localization(state):
             and c.get("candidate_kind") in ("defect_candidate","unclassified")]
     sites=[]
     for candidate in active:
+        located=v2_resolve_locations(candidate.get("source_location_claims"),source)
         sites.append({"candidate_id":candidate["id"],"candidate_kind":candidate.get("candidate_kind"),
                       "site_check":v2_site_check(candidate,source),"evidence":v2_evidence_grade(state,candidate),
-                      "spans":v2_location_spans(candidate.get("source_location_claims"))})
+                      "spans":located["spans"],"quotes_resolved":located["quotes_resolved"],
+                      "quotes_ambiguous":located["quotes_ambiguous"]})
     ranked=sorted(sites,key=lambda s: ({"trusted_mismatch":3,"sandbox_observation":2,"static_only":1,"unverified":0}[s["evidence"]],
-                                        {"ok":3,"coarse_site":2,"weak_site":1,"out_of_range":0,"no_line":0}[s["site_check"]]), reverse=True)
+                                        {"ok":3,"coarse_site":2,"weak_site":1,"ambiguous_quote":1,"out_of_range":0,"no_line":0}[s["site_check"]]), reverse=True)
     if not sites: status="no_finding"
     elif any(s["site_check"]=="ok" for s in sites): status="located_with_line"
     elif any(s["site_check"]=="coarse_site" for s in sites): status="located_coarse_line"
@@ -293,7 +336,7 @@ def v2_protocol_text():
         +json.dumps(v2_protocol_spec(),ensure_ascii=False,separators=(",",":"))+". "
         "On later turns source_context may contain only selected windows, not the complete source. source_line_count is for the original source; read_source can retrieve any omitted definition or dependency from original. Candidate-location windows are navigation context only, not evidence. previous_next_question is the prior explicit question, not a fact or instruction. "
         "established_invariants provides confirmed working-memory facts from prior turns; do not re-derive them in reasoning. Provide optional invariants (at most 8 concise string facts) to preserve established program mechanics across turns. "
-        "Every response must carry all required top-level keys even when they are empty: candidates, updates and actions may be [], and next_question may be "". Omitting or misspelling a required key, or writing an action/update key outside the exact set listed for its kind or disposition, makes that proposal invalid. Candidates are user-visible claims, not tool requests. The controller assigns IDs and stores every readable candidate before it validates actions. Preserve claim text; source locations, requirements, causal explanations and candidate interpretations are not verified facts. The reader is a solver who will fix the code themselves: every claim you leave active must name the line range it lives on in the current source (\"line 24\" or \"lines 20-25\"), because a location without line numbers cannot be acted on; give the shortest range that still covers the change rather than the whole function or block, and merge a later restatement of a site you already hold into that candidate instead of submitting it again. "
+        "Every response must carry all required top-level keys even when they are empty: candidates, updates and actions may be [], and next_question may be "". Omitting or misspelling a required key, or writing an action/update key outside the exact set listed for its kind or disposition, makes that proposal invalid. Candidates are user-visible claims, not tool requests. The controller assigns IDs and stores every readable candidate before it validates actions. Preserve claim text; source locations, requirements, causal explanations and candidate interpretations are not verified facts. The reader is a solver who will fix the code themselves: every claim you leave active must be locatable in the current source, either by naming the line range (\"line 24\" or \"lines 20-25\") or by quoting the exact source text in backticks with enough context that the quote occurs only once - quoting is never more expensive than counting lines, and an ambiguous quote is not a location; give the shortest extent that still covers the change rather than the whole function or block, and merge a later restatement of a site you already hold into that candidate instead of submitting it again. "
         "Updates are proposals; the controller retains the original claim and each revision and does not treat an update as evidence. Candidates and revisions may cite only evidence IDs already supplied by the controller; unknown/future IDs are recorded as rejected without discarding the readable claim. Tool-action links are recorded separately from explicit model citations, and one action linked to multiple candidates is group-associated, not independent support. Compare each claim to its trigger and actual observations; choose a discriminating action or revise/merge/downgrade when evidence is mixed, without forcing extra rounds. Do not probe outside a known input domain, assert time-limit failure without timing evidence, or repeat an observation that tests the same mechanism. Inputs must strictly satisfy all format and domain guarantees in the problem statement; do not test or assume out-of-spec format deviations (e.g. single-line inputs broken across lines). An anomaly triggered only by out-of-spec inputs or format violations is not a program defect and must be withdrawn, not retained as an active candidate. Inputs must strictly satisfy all format and domain guarantees in the problem statement; do not test or assume out-of-spec format deviations (e.g. single-line inputs broken across lines). An anomaly triggered only by out-of-spec inputs or format violations is not a program defect and must be withdrawn, not retained as an active candidate. Each tool action is independently validated and a rejected action must not erase candidates or other valid actions. "
         "run_bash executes arbitrary shell commands or scripts in the Docker sandbox with a 40s timeout to verify calculations, generate test cases, or run brute-force checks; use run_bash instead of doing manual mental simulations in reasoning. run_variant edits apply only to a derived source and execute in Docker. Expected output can come only from request tests or a controller-recomputed configured Oracle. Without such an expected, record an observation with matched=null. Never provide or alter expected values, Oracle code, environment, budget, tests or the original request.")
 

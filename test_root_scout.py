@@ -2016,10 +2016,35 @@ class V2DiscoveryTests(unittest.TestCase):
         self.assertEqual(root_scout.v2_localization(without_line)["status"],"located_without_line")
         self.assertEqual(root_scout.v2_localization(without_line)["sites"][0]["site_check"],"no_line")
 
+    def test_v2_quoted_location_resolves_without_counting_lines(self):
+        source="int main() {\n  int best = 0;\n  for (int i = 1; i < n - 1; i++) {\n    best = min(best, a[i]);\n  }\n}\n"
+        quoted={"source_location_claims":["`for (int i = 1; i < n - 1; i++) {`"]}
+        self.assertEqual(root_scout.v2_quote_span(source,"for (int i = 1; i < n - 1; i++) {"),((3,3),1))
+        self.assertEqual(root_scout.v2_site_check(quoted,source),"ok")
+        located=root_scout.v2_resolve_locations(quoted["source_location_claims"],source)
+        self.assertEqual(located["spans"],[(3,3)])
+        self.assertEqual(located["quotes_resolved"],["for (int i = 1; i < n - 1; i++) {"])
+        multi={"source_location_claims":["`for (int i = 1; i < n - 1; i++) {\n    best = min(best, a[i]);`"]}
+        self.assertEqual(root_scout.v2_resolve_locations(multi["source_location_claims"],source)["spans"],[(3,4)])
+
+    def test_v2_ambiguous_or_missing_quote_is_not_a_location(self):
+        source="a(1);\nb(2);\na(1);\n"
+        self.assertEqual(root_scout.v2_quote_span(source,"a(1);"),(None,2))
+        self.assertEqual(root_scout.v2_quote_span(source,"zzz();"),(None,0))
+        ambiguous={"source_location_claims":["`a(1);`"]}
+        self.assertEqual(root_scout.v2_site_check(ambiguous,source),"ambiguous_quote")
+        self.assertEqual(root_scout.v2_site_check({"source_location_claims":["`zzz();`"]},source),"no_line")
+        # an explicit line range nearby disambiguates the repeated quote
+        both={"source_location_claims":["line 3","`a(1);`"]}
+        self.assertEqual(root_scout.v2_resolve_locations(both["source_location_claims"],source)["spans"],[(3,3),(3,3)])
+        away={"source_location_claims":["line 1","`a(1);`"]}
+        self.assertEqual(root_scout.v2_resolve_locations(away["source_location_claims"],source)["spans"],[(1,1),(1,1)])
+
     def test_v2_prompt_asks_for_a_line_range_and_for_merging_restatements(self):
         text=root_scout.system_for_phase("EXPLORE_V2",prompt_profile="baseline")
-        self.assertIn("must name the line range it lives on",text)
-        self.assertIn("give the shortest range that still covers the change",text)
+        self.assertIn("must be locatable in the current source",text)
+        self.assertIn("quoting the exact source text in backticks",text)
+        self.assertIn("give the shortest extent that still covers the change",text)
         self.assertIn("merge a later restatement of a site you already hold",text)
 
     def test_v2_missing_action_kind_is_inferred_when_one_spec_fits(self):
