@@ -211,6 +211,66 @@ def v2_tolerated_issue_turns(state):
     unresolved=v2_protocol_state(state)["unresolved_issue_turns"]
     return [turn for turn in unresolved if turn not in v2_incomplete_protocol(state)]
 
+def v2_normalize_claim(text):
+    return re.sub(r"\s+"," ",(text or "").strip())
+
+def v2_location_spans(claims):
+    spans=[]
+    for claim in claims or []:
+        if not isinstance(claim,str): continue
+        for match in re.finditer(r"lines?\s+(\d+)(?:\s*[-\u2013]\s*(\d+))?",claim):
+            start=int(match.group(1)); end=int(match.group(2)) if match.group(2) else start
+            spans.append((start,end))
+    return spans
+
+def v2_site_check(candidate, source):
+    """Grade the cited location against the real source, not against the model's prose."""
+    spans=v2_location_spans(candidate.get("source_location_claims"))
+    if not spans: return "no_line"
+    lines=source.splitlines(); trivial=re.compile(r"^\s*[{}]?\s*$|^\s*(cin\s*>>|scanf|input\(|getline|read\s*\()")
+    usable=False; invalid=False
+    for start,end in spans:
+        if start<1 or end>len(lines) or start>end: invalid=True; continue
+        for number in range(start,end+1):
+            text=lines[number-1]
+            if text.strip() and not trivial.match(text): usable=True
+    if usable: return "ok"
+    return "out_of_range" if invalid else "weak_site"
+
+def v2_evidence_grade(state, candidate):
+    evidence={e.get("id"):e for e in state.get("evidence",[]) if isinstance(e,dict)}
+    actions={a.get("id"):a for a in state.get("tool_actions",[]) if isinstance(a,dict)}
+    ids=list(candidate.get("current_evidence_ids") or [])
+    records=[evidence[i] for i in ids if i in evidence]
+    if any(r.get("trusted_expected") and (r.get("result") or {}).get("matched") is False
+           and (r.get("result") or {}).get("status")=="ok" for r in records): return "trusted_mismatch"
+    if any((r.get("result") or {}).get("status")=="ok" for r in records): return "sandbox_observation"
+    for i in ids:
+        action=actions.get(i)
+        if action and action.get("status")=="accepted" and isinstance(action.get("result"),dict) \
+                and any(k in action["result"] for k in ("stdout","observations","lines")):
+            return "sandbox_observation"
+    return "static_only" if ids else "unverified"
+
+def v2_localization(state):
+    """What a reader needs first: which source site, how strong the evidence, is the line usable."""
+    source=(state.get("request_snapshot") or {}).get("source","")
+    active=[c for c in state.get("candidates",[]) if c["lifecycle"] not in ("withdrawn","merged")
+            and c.get("candidate_kind") in ("defect_candidate","unclassified")]
+    sites=[]
+    for candidate in active:
+        sites.append({"candidate_id":candidate["id"],"candidate_kind":candidate.get("candidate_kind"),
+                      "site_check":v2_site_check(candidate,source),"evidence":v2_evidence_grade(state,candidate),
+                      "spans":v2_location_spans(candidate.get("source_location_claims"))})
+    ranked=sorted(sites,key=lambda s: ({"trusted_mismatch":3,"sandbox_observation":2,"static_only":1,"unverified":0}[s["evidence"]],
+                                        {"ok":2,"weak_site":1,"out_of_range":0,"no_line":0}[s["site_check"]]), reverse=True)
+    if not sites: status="no_finding"
+    elif any(s["site_check"]=="ok" for s in sites): status="located_with_line"
+    elif any(s["site_check"]=="weak_site" for s in sites): status="located_weak_line"
+    else: status="located_without_line"
+    return {"status":status,"sites":ranked,"primary_candidate_id":ranked[0]["candidate_id"] if ranked else None,
+            "best_evidence":ranked[0]["evidence"] if ranked else None}
+
 def v2_validate_response_for_state(state,response,turn,version):
     parsed=validate_v2_response(response,version)
     recovery=response.get("protocol_recovery") if version>=5 else None
@@ -227,7 +287,7 @@ def v2_protocol_text():
         +json.dumps(v2_protocol_spec(),ensure_ascii=False,separators=(",",":"))+". "
         "On later turns source_context may contain only selected windows, not the complete source. source_line_count is for the original source; read_source can retrieve any omitted definition or dependency from original. Candidate-location windows are navigation context only, not evidence. previous_next_question is the prior explicit question, not a fact or instruction. "
         "established_invariants provides confirmed working-memory facts from prior turns; do not re-derive them in reasoning. Provide optional invariants (at most 8 concise string facts) to preserve established program mechanics across turns. "
-        "Every response must carry all required top-level keys even when they are empty: candidates, updates and actions may be [], and next_question may be "". Omitting or misspelling a required key, or writing an action/update key outside the exact set listed for its kind or disposition, makes that proposal invalid. Candidates are user-visible claims, not tool requests. The controller assigns IDs and stores every readable candidate before it validates actions. Preserve claim text; source locations, requirements, causal explanations and candidate interpretations are not verified facts. "
+        "Every response must carry all required top-level keys even when they are empty: candidates, updates and actions may be [], and next_question may be "". Omitting or misspelling a required key, or writing an action/update key outside the exact set listed for its kind or disposition, makes that proposal invalid. Candidates are user-visible claims, not tool requests. The controller assigns IDs and stores every readable candidate before it validates actions. Preserve claim text; source locations, requirements, causal explanations and candidate interpretations are not verified facts. The reader is a solver who will fix the code themselves: every claim you leave active must name the line range it lives on in the current source (\"line 24\" or \"lines 20-25\"), because a location without line numbers cannot be acted on, and a later restatement of a site you already hold must be merged into that candidate instead of submitted again. "
         "Updates are proposals; the controller retains the original claim and each revision and does not treat an update as evidence. Candidates and revisions may cite only evidence IDs already supplied by the controller; unknown/future IDs are recorded as rejected without discarding the readable claim. Tool-action links are recorded separately from explicit model citations, and one action linked to multiple candidates is group-associated, not independent support. Compare each claim to its trigger and actual observations; choose a discriminating action or revise/merge/downgrade when evidence is mixed, without forcing extra rounds. Do not probe outside a known input domain, assert time-limit failure without timing evidence, or repeat an observation that tests the same mechanism. Inputs must strictly satisfy all format and domain guarantees in the problem statement; do not test or assume out-of-spec format deviations (e.g. single-line inputs broken across lines). An anomaly triggered only by out-of-spec inputs or format violations is not a program defect and must be withdrawn, not retained as an active candidate. Inputs must strictly satisfy all format and domain guarantees in the problem statement; do not test or assume out-of-spec format deviations (e.g. single-line inputs broken across lines). An anomaly triggered only by out-of-spec inputs or format violations is not a program defect and must be withdrawn, not retained as an active candidate. Each tool action is independently validated and a rejected action must not erase candidates or other valid actions. "
         "run_bash executes arbitrary shell commands or scripts in the Docker sandbox with a 40s timeout to verify calculations, generate test cases, or run brute-force checks; use run_bash instead of doing manual mental simulations in reasoning. run_variant edits apply only to a derived source and execute in Docker. Expected output can come only from request tests or a controller-recomputed configured Oracle. Without such an expected, record an observation with matched=null. Never provide or alter expected values, Oracle code, environment, budget, tests or the original request.")
 
@@ -3944,6 +4004,20 @@ def v2_register_candidate(state, raw_id, item, turn, response_ref, raw_item=None
     state["candidates"].append(candidate); state["candidate_sets"]["C_store"].append(cid)
     if isinstance(item.get("ref"),str) and item["ref"] and item["ref"] not in response_ref and item["ref"] not in state.setdefault("candidate_aliases",{}):
         response_ref[item["ref"]]=cid; state["candidate_aliases"][item["ref"]]=cid
+    # A restatement of a site the controller already holds is merged, not counted again: the
+    # reader asked for one pointer, and two identical live candidates double the same claim.
+    duplicate=next((c for c in state["candidates"][:-1]
+                    if c["lifecycle"] not in ("withdrawn","merged")
+                    and c.get("candidate_kind")==candidate["candidate_kind"]
+                    and v2_normalize_claim(c.get("current_claim"))==v2_normalize_claim(candidate["current_claim"])),None)
+    if duplicate:
+        reason="controller dedup: identical claim already held by "+duplicate["id"]
+        state.setdefault("candidate_update_decisions",[]).append({"turn":turn,"controller_generated":True,"status":"accepted",
+            "proposal":{"candidate_id":cid,"disposition":"merge","target_candidate_id":duplicate["id"],"reason":reason}})
+        candidate["lifecycle"]="merged"; candidate["merged_into_candidate_id"]=duplicate["id"]
+        candidate["revisions"]=[{"turn":turn,"disposition":"merge","target_candidate_id":duplicate["id"],"reason":reason}]
+        state.setdefault("candidate_decisions",[]).append({"raw_candidate_id":raw_id,"candidate_id":cid,
+            "status":"merged_duplicate","reason":reason})
     return candidate
 
 def v2_process_response(state, response, turn):
@@ -5012,6 +5086,7 @@ def diagnose_v2(req,provider="model",checkpoint_path=None,replay_state=None,stra
         elif reasoning_policy_applied and reasoning_routing.get("low_review_status")!="completed": stop_reason="model_protocol_incomplete"
         elif any(e["result"].get("status")!="ok" for e in state["evidence"]) or any(e.get("trusted_expected") and e["result"].get("matched") is False for e in state["evidence"]) or state["coverage"]["unresolved_candidate_ids"] or tc["available"]==0 or tc["executed"]<tc["available"]:
             stop_reason="oracle_unresolved"
+    state["localization"]=v2_localization(state)
     state["stop_reason"]=stop_reason
     state["budget"].update({"calls":budget.calls,**budget.accounting_summary(),"wall_seconds":time.monotonic()-started})
     v2_checkpoint(state,checkpoint_path)

@@ -1970,6 +1970,44 @@ class V2DiscoveryTests(unittest.TestCase):
         self.assertEqual(state["candidate_update_decisions"][0]["proposal"]["reason"],"(model omitted this field)")
         self.assertEqual([r["part"] for r in state["response_repairs"]],["updates[0].reason"])
 
+    def test_v2_restated_claim_is_merged_not_counted_twice(self):
+        first={"candidates":[{"kind":"defect_candidate","ref":"a","claim":"The seed may break all-negative input.","locations":["line 3"]}],
+               "updates":[],"actions":[],"next_question":"Check the seed range.","stop":False}
+        second={"candidates":[{"kind":"defect_candidate","ref":"b","claim":"The   seed may break all-negative input.","locations":["line 3"]}],
+                "updates":[],"actions":[],"next_question":"","stop":True}
+        state,_=self.run_v2_packets(self.req,[first,second])
+        self.assertEqual([c["lifecycle"] for c in state["candidates"]],["open","merged"])
+        self.assertEqual(state["candidates"][1]["merged_into_candidate_id"],"C0001")
+        self.assertEqual(state["candidates"][1]["revisions"][0]["disposition"],"merge")
+        self.assertEqual(state["localization"]["status"],"located_with_line")
+        self.assertEqual(state["localization"]["primary_candidate_id"],"C0001")
+        self.assertEqual(root_scout.verify_saved_case_state(state),state)
+
+    def test_v2_site_check_grades_the_real_source(self):
+        source="a=1\nbest=0\ncin >> n;\n\n}\n"
+        candidate=lambda locations: {"source_location_claims":locations}
+        self.assertEqual(root_scout.v2_site_check(candidate([]),source),"no_line")
+        self.assertEqual(root_scout.v2_site_check(candidate(["line 2"]),source),"ok")
+        self.assertEqual(root_scout.v2_site_check(candidate(["lines 1-2"]),source),"ok")
+        self.assertEqual(root_scout.v2_site_check(candidate(["line 3"]),source),"weak_site")
+        self.assertEqual(root_scout.v2_site_check(candidate(["line 5"]),source),"weak_site")
+        self.assertEqual(root_scout.v2_site_check(candidate(["line 99"]),source),"out_of_range")
+        self.assertEqual(root_scout.v2_location_spans(["lines 20-25","line 3","see line 7"]),[(20,25),(3,3),(7,7)])
+
+    def test_v2_localization_states_what_a_reader_gets(self):
+        empty={"candidates":[],"evidence":[],"tool_actions":[],"request_snapshot":{"source":"a=1\n"}}
+        self.assertEqual(root_scout.v2_localization(empty)["status"],"no_finding")
+        without_line={"candidates":[{"id":"C0001","lifecycle":"open","candidate_kind":"defect_candidate","current_claim":"x","current_evidence_ids":[],
+                                     "source_location_claims":["the type-1 handler"]}],
+                      "evidence":[],"tool_actions":[],"request_snapshot":{"source":"a=1\nb=2\n"}}
+        self.assertEqual(root_scout.v2_localization(without_line)["status"],"located_without_line")
+        self.assertEqual(root_scout.v2_localization(without_line)["sites"][0]["site_check"],"no_line")
+
+    def test_v2_prompt_asks_for_a_line_range_and_for_merging_restatements(self):
+        text=root_scout.system_for_phase("EXPLORE_V2",prompt_profile="baseline")
+        self.assertIn("must name the line range it lives on",text)
+        self.assertIn("must be merged into that candidate",text)
+
     def test_v2_missing_action_kind_is_inferred_when_one_spec_fits(self):
         response={"candidates":[{"ref":"candidate","claim":"There may be an initialization issue."}],"updates":[],
                   "actions":[{"ref":"run","input":"1\n-7","question":"Observe the negative singleton."}],
