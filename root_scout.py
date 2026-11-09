@@ -687,16 +687,43 @@ def combine_testcases(base, *extra_groups):
             if key not in seen: seen.add(key); out.append(dict(case))
     return out
 
+def v2_infer_action_kind(item, specs):
+    """A missing kind is derivable only when exactly one action spec admits the fields present.
+
+    Every kind needs a disjoint payload field (line bounds, input, command, or a parent
+    version), so the present keys normally pick out one spec. Anything less than unique
+    stays unknown and keeps rejecting the proposal.
+    """
+    if not isinstance(item,dict): return None
+    if "kind" in item and item.get("kind") not in (None,""): return None
+    # kind, ref and question are exactly the fields this pass fills, so they cannot also be
+    # what decides the kind; compare only the payload fields.
+    fillable={"kind","ref","question"}
+    present=set(item)-fillable; fits=[]
+    for kind,spec in specs.items():
+        required=set(spec["required"])-fillable; allowed=required|(set(spec.get("optional",[]))-fillable)
+        if required<=present and present<=allowed: fits.append(kind)
+    return fits[0] if len(fits)==1 else None
+
 def v2_response_repairs(data, protocol_schema_version=4):
     """Fill only fields whose absence has one obvious default; provided values are never altered.
 
-    Top-level keys become empty containers. Inside a proposer, the action alias, the action
-    question and a disposition reason are bookkeeping, not claims: a missing one is filled and
-    recorded instead of spending a clarification call on it. Semantics are never guessed - an
-    absent kind, command, input, claim or target still rejects the proposal.
+    Top-level keys become empty containers, and a single-key {"arguments": ...} envelope is
+    unwrapped. Inside a proposer, the action kind (when one spec fits), the action alias, the
+    action question and a disposition reason are bookkeeping, not claims: a missing one is
+    filled and recorded instead of spending a clarification call on it. Semantics are never
+    guessed - an absent command, input, claim or target still rejects the proposal.
     """
     if not isinstance(data,dict): return data,[]
     fixed=copy.deepcopy(data); repairs=[]
+    if set(fixed)=={"arguments"}:
+        inner=fixed["arguments"]; decoded=inner
+        if isinstance(inner,str):
+            try: decoded=json.loads(inner)
+            except Exception: decoded=None
+        if isinstance(decoded,dict):
+            fixed=copy.deepcopy(decoded)
+            repairs.append({"part":"response_repair","reason":"unwrapped a single arguments envelope"})
     for key in V2_PROTOCOL["required_response"]:
         if key in fixed: continue
         default=[] if key in ("candidates","updates","actions") else "" if key=="next_question" else False
@@ -708,7 +735,12 @@ def v2_response_repairs(data, protocol_schema_version=4):
         taken={x.get("ref") for x in actions if isinstance(x,dict) and isinstance(x.get("ref"),str)}
         taken|={c.get("ref") for c in fixed.get("candidates") or [] if isinstance(c,dict) and isinstance(c.get("ref"),str)}
         for index,item in enumerate(actions):
-            if not isinstance(item,dict) or not isinstance(item.get("kind"),str) or item.get("kind") not in specs: continue
+            if not isinstance(item,dict): continue
+            if not (isinstance(item.get("kind"),str) and item["kind"] in specs):
+                inferred=v2_infer_action_kind(item,specs)
+                if inferred is None: continue
+                item["kind"]=inferred
+                repairs.append({"part":f"actions[{index}].kind","reason":f"missing action kind; inferred {inferred!r} from the fields present"})
             required=set(specs[item["kind"]]["required"])
             ref=item.get("ref")
             if "ref" in required and (not isinstance(ref,str) or not ref.strip()):

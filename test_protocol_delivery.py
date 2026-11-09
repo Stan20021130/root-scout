@@ -38,7 +38,7 @@ class ProtocolDeliveryTests(unittest.TestCase):
 
     def test_explicit_recovery_preserves_original_error_and_candidate_history(self):
         bad=answer(candidates=[{"ref":"c","claim":"A readable concern."}],
-                   actions=[{"ref":"bad","command":"echo must-not-run","question":"check"}])
+                   actions=[{"ref":"bad","question":"check"}])
         fixed=answer(updates=[{"candidate_id":"C0001","disposition":"withdraw","reason":"Source reasoning resolves this concern."}],
             protocol_recovery={"issue_turns":[1],"reason":"Discarded the malformed tester; no successful execution is claimed."})
         state,prompts=self.diagnose([bad,fixed])

@@ -1970,8 +1970,35 @@ class V2DiscoveryTests(unittest.TestCase):
         self.assertEqual(state["candidate_update_decisions"][0]["proposal"]["reason"],"(model omitted this field)")
         self.assertEqual([r["part"] for r in state["response_repairs"]],["updates[0].reason"])
 
-    def test_v2_missing_kind_bad_command_or_extra_key_still_rejects(self):
-        cases=[({"ref":"run","input":"1\n-7","question":"Observe."},"unknown action kind"),
+    def test_v2_missing_action_kind_is_inferred_when_one_spec_fits(self):
+        response={"candidates":[{"ref":"candidate","claim":"There may be an initialization issue."}],"updates":[],
+                  "actions":[{"ref":"run","input":"1\n-7","question":"Observe the negative singleton."}],
+                  "next_question":"","stop":True}
+        state=self.run_v2(self.req,response)
+        self.assertEqual(state["protocol_issues"],[])
+        action=state["tool_actions"][0]
+        self.assertEqual((action["kind"],action["status"]),("run_original","accepted"))
+        self.assertEqual([r["part"] for r in state["response_repairs"]],["actions[0].kind"])
+        self.assertEqual(root_scout.verify_saved_case_state(state),state)
+
+    def test_v2_action_kind_inference_declines_on_ambiguity_and_never_overrides_a_given_kind(self):
+        specs=root_scout.v2_protocol_spec(5)["actions"]
+        self.assertEqual(root_scout.v2_infer_action_kind({"ref":"r","question":"q","command":"echo 1"},specs),"run_bash")
+        self.assertEqual(root_scout.v2_infer_action_kind({"ref":"r","question":"q","line_start":1,"line_end":2},specs),"read_source")
+        self.assertIsNone(root_scout.v2_infer_action_kind({"ref":"r","question":"q"},specs),"no payload field fits exactly one spec")
+        self.assertIsNone(root_scout.v2_infer_action_kind({"kind":"run_bash","ref":"r","question":"q","input":"1"},specs),"a stated kind is never overridden")
+        self.assertIsNone(root_scout.v2_infer_action_kind({"kind":[],"ref":"r","question":"q"},specs))
+
+    def test_v2_single_arguments_envelope_is_unwrapped(self):
+        inner={"candidates":[{"ref":"candidate","claim":"There may be an initialization issue."}],"updates":[],
+               "actions":[],"next_question":"","stop":True}
+        fixed,repairs=root_scout.v2_response_repairs({"arguments":json.dumps(inner)},5)
+        self.assertEqual(fixed,inner)
+        self.assertEqual([r["reason"] for r in repairs],["unwrapped a single arguments envelope"])
+        self.assertEqual(root_scout.validate_v2_response(fixed,5)["issues"],[])
+
+    def test_v2_missing_action_kind_bad_command_or_extra_key_still_rejects(self):
+        cases=[({"ref":"run","question":"Observe."},"unknown action kind"),
                ({"kind":"run_original","ref":"run","question":"Observe."},"action fields must exactly match protocol"),
                ({"kind":"run_original","ref":"run","input":"1\n-7","question":"Observe.","expected":"-7\n"},"action fields must exactly match protocol")]
         for action,reason in cases:
