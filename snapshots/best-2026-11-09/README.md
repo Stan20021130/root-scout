@@ -62,7 +62,7 @@ python validation\bench-100-full-2026-11-09\analyze.py # 与 bench-100-2026-11-0
 
 ## 已知短板（未修）
 
-1. **p035 稳定失手**：复跑 A/B 与全量四次采样都触发 `model_protocol_incomplete`；需要一个"被拒动作"的恢复通道，与 schema 澄清分开。
+1. **被拒动作没有恢复通道**：本次全量唯一的 `model_protocol_incomplete` 是 p035 —— `run_variant` 声明的行区间是 20–24，却给了 6 行 `old_text`（多带了第 25 行的 `}`），差一行被拒；它的候选内容其实是对的。schema-20 里的 p025 是同一失败模式。p035 本身在 schema-20、复跑 A/B 三次采样里都是 `oracle_unresolved` 且正常检出，所以问题不是"这一题总失手"，而是这类单点格式错误一旦出现就把整个结论打成协议失败。
 2. **kind 标签抖动**：同一份内容会在 `defect_candidate` / `resource_concern` / `unclassified` 之间漂移（p037 写成 `unclassified` 但内容是硬反例；p089 复跑中写成 `resource_concern`）。严格口径对标签极敏感，读结果时必须同时看内容。
 3. **"真 UB 但不改输出"无维度**：p061 这类只能记成 control 警报；要分清需要给候选加"是否改变输出"的字段。
 4. **单跑噪声**：逐例 token 中位数 0.92×、p10 0.47×、p90 2.46×、max 4.49×；单例级别的检出翻转不可归因，只有总体指标可归因。
