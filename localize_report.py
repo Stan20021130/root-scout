@@ -222,7 +222,11 @@ def report(case_id):
 
     tokens = state["budget"]["confirmed_usage_tokens"]
     wall = state["budget"]["wall_seconds"]
-    lines.append(f"---\n运行：{len(calls)} 次调用 / {tokens:,} token / {wall:.0f}s ｜ 结论：{STOP_TEXT.get(state['stop_reason'], state['stop_reason'])}")
+    out = sum(c.get("output_tokens") or 0 for c in calls)
+    reason = sum(c.get("reasoning_tokens") or 0 for c in calls)
+    share = f" ｜ 推理占输出 {reason / out * 100:.0f}%" if out else ""
+    lines.append(f"---\n运行：{len(calls)} 次调用 / {tokens:,} token / {wall:.0f}s{share} ｜ "
+                 f"结论：{STOP_TEXT.get(state['stop_reason'], state['stop_reason'])}")
     return "\n".join(lines)
 
 

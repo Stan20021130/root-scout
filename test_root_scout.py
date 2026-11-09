@@ -2046,6 +2046,9 @@ class V2DiscoveryTests(unittest.TestCase):
         self.assertIn("quoting the exact source text in backticks",text)
         self.assertIn("give the shortest extent that still covers the change",text)
         self.assertIn("merge a later restatement of a site you already hold",text)
+        self.assertIn("Keep the first response short",text)
+        # the claim that quoting is never more expensive was measured false and removed
+        self.assertNotIn("never more expensive",text)
 
     def test_v2_missing_action_kind_is_inferred_when_one_spec_fits(self):
         response={"candidates":[{"ref":"candidate","claim":"There may be an initialization issue."}],"updates":[],
