@@ -687,8 +687,14 @@ def combine_testcases(base, *extra_groups):
             if key not in seen: seen.add(key); out.append(dict(case))
     return out
 
-def v2_response_repairs(data):
-    """Fill only missing required top-level keys; provided values are never altered."""
+def v2_response_repairs(data, protocol_schema_version=4):
+    """Fill only fields whose absence has one obvious default; provided values are never altered.
+
+    Top-level keys become empty containers. Inside a proposer, the action alias, the action
+    question and a disposition reason are bookkeeping, not claims: a missing one is filled and
+    recorded instead of spending a clarification call on it. Semantics are never guessed - an
+    absent kind, command, input, claim or target still rejects the proposal.
+    """
     if not isinstance(data,dict): return data,[]
     fixed=copy.deepcopy(data); repairs=[]
     for key in V2_PROTOCOL["required_response"]:
@@ -696,6 +702,34 @@ def v2_response_repairs(data):
         default=[] if key in ("candidates","updates","actions") else "" if key=="next_question" else False
         fixed[key]=default
         repairs.append({"part":"response_repair","reason":f"missing top-level field {key}; treated as {default!r}"})
+    specs=v2_protocol_spec(protocol_schema_version).get("actions",{})
+    actions=fixed.get("actions")
+    if isinstance(actions,list):
+        taken={x.get("ref") for x in actions if isinstance(x,dict) and isinstance(x.get("ref"),str)}
+        taken|={c.get("ref") for c in fixed.get("candidates") or [] if isinstance(c,dict) and isinstance(c.get("ref"),str)}
+        for index,item in enumerate(actions):
+            if not isinstance(item,dict) or not isinstance(item.get("kind"),str) or item.get("kind") not in specs: continue
+            required=set(specs[item["kind"]]["required"])
+            ref=item.get("ref")
+            if "ref" in required and (not isinstance(ref,str) or not ref.strip()):
+                generated=f"auto-ref-{index+1}"
+                while generated in taken: generated+="_"
+                taken.add(generated); item["ref"]=generated
+                repairs.append({"part":f"actions[{index}].ref","reason":f"missing or unusable action ref; assigned {generated!r}"})
+            question=item.get("question")
+            if "question" in required and (not isinstance(question,str) or not question.strip()):
+                item["question"]="(model omitted this field)"
+                repairs.append({"part":f"actions[{index}].question","reason":"missing action question; filled with an explicit placeholder"})
+    update_fields=V2_PROTOCOL["update_fields"]
+    updates=fixed.get("updates")
+    if isinstance(updates,list):
+        for index,item in enumerate(updates):
+            if not isinstance(item,dict) or item.get("disposition") not in update_fields["disposition"]: continue
+            if "reason" not in update_fields["common_required"]: continue
+            reason=item.get("reason")
+            if not isinstance(reason,str) or not reason.strip():
+                item["reason"]="(model omitted this field)"
+                repairs.append({"part":f"updates[{index}].reason","reason":"missing disposition reason; filled with an explicit placeholder"})
     return fixed,repairs
 
 
@@ -3840,7 +3874,7 @@ def v2_register_candidate(state, raw_id, item, turn, response_ref, raw_item=None
 
 def v2_process_response(state, response, turn):
     original_response=response
-    response,repairs=v2_response_repairs(response)
+    response,repairs=v2_response_repairs(response,state.get("run_configuration",{}).get("protocol_schema_version",4))
     turn_record={"turn":turn,"visible_response":copy.deepcopy(response),"visible_response_sha256":canonical_sha(response),
                  "model_response_sha256":canonical_sha(original_response)}
     if repairs:

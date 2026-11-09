@@ -54,7 +54,7 @@ class ProtocolDeliveryTests(unittest.TestCase):
             core.verify_saved_case_state(forged)
 
     def test_a_valid_later_response_does_not_silently_erase_an_unacknowledged_error(self):
-        bad=answer(actions=[{"kind":"run_bash","command":"echo x","question":"missing ref"}])
+        bad=answer(actions=[{"kind":"run_bash","question":"missing the command"}])
         state,_=self.diagnose([bad,answer(),answer()])
         self.assertEqual(state["stop_reason"],"model_protocol_incomplete")
         self.assertEqual(core.v2_protocol_state(state)["status"],"unresolved")
@@ -256,11 +256,11 @@ class SchemaClarificationStopTests(unittest.TestCase):
 
     def test_a_stop_after_a_repair_attempt_is_not_a_protocol_failure(self):
         # Turn 1 drops a malformed tester, the clarify replies and acknowledges turn 1.
-        first=answer(actions=[{"kind":"run_bash","command":"echo must-not-run","question":"missing ref"}],stop=False)
+        first=answer(actions=[{"kind":"run_bash","question":"missing the command"}],stop=False)
         acknowledged=answer(protocol_recovery={"issue_turns":[1],"reason":"Discarded the malformed tester."},
                             next_question="Which path fixes the seed?",stop=False)
         # Turn 2 drops another tester, is clarified once more, and then stops.
-        second=answer(actions=[{"kind":"run_bash","command":"echo must-not-run","question":"missing ref again"}],stop=True)
+        second=answer(actions=[{"kind":"run_bash","question":"missing the command again"}],stop=True)
         clean_stop=answer()
         state,prompts=self.diagnose([first,acknowledged,second,clean_stop])
         self.assertEqual([phase for phase,_ in prompts],["EXPLORE_V2","EXPLORE_V2_CLARIFY","EXPLORE_V2","EXPLORE_V2_CLARIFY"])
@@ -274,7 +274,7 @@ class SchemaClarificationStopTests(unittest.TestCase):
         self.assertIn("收尾时容忍",core.markdown(state))
 
     def test_a_third_schema_issue_is_recorded_without_a_third_call(self):
-        bad=lambda stop: answer(actions=[{"kind":"run_bash","command":"echo must-not-run","question":"missing ref"}],
+        bad=lambda stop: answer(actions=[{"kind":"run_bash","question":"missing the command"}],
                                 next_question="" if stop else "Keep probing.",stop=stop)
         keep=lambda turn: answer(protocol_recovery={"issue_turns":[turn],"reason":"Discarded the malformed tester."},
                                  next_question="Keep probing.",stop=False)

@@ -1940,6 +1940,48 @@ class V2DiscoveryTests(unittest.TestCase):
         self.assertIn("C_raw / C_store / C_deliver",report)
         self.assertEqual(root_scout.verify_saved_case_state(state),state)
 
+    def test_v2_missing_action_alias_is_filled_instead_of_costing_a_clarification(self):
+        response={"candidates":[{"ref":"candidate","claim":"There may be an initialization issue."}],"updates":[],
+                  "actions":[{"kind":"run_original","input":"1\n-7","question":"Observe the negative singleton."}],
+                  "next_question":"","stop":True}
+        state=self.run_v2(self.req,response)
+        self.assertEqual(state["protocol_issues"],[])
+        action=state["tool_actions"][0]
+        self.assertEqual(action["status"],"accepted",action.get("blocked_reason"))
+        self.assertEqual(action["proposal"]["ref"],"auto-ref-1")
+        self.assertEqual([r["part"] for r in state["response_repairs"]],["actions[0].ref"])
+        self.assertEqual(root_scout.verify_saved_case_state(state),state)
+
+    def test_v2_missing_action_question_is_filled_with_an_explicit_placeholder(self):
+        response={"candidates":[{"ref":"candidate","claim":"There may be an initialization issue."}],"updates":[],
+                  "actions":[{"kind":"run_original","ref":"run","input":"1\n-7"}],"next_question":"","stop":True}
+        state=self.run_v2(self.req,response)
+        self.assertEqual(state["protocol_issues"],[])
+        self.assertEqual(state["tool_actions"][0]["proposal"]["question"],"(model omitted this field)")
+        self.assertEqual([r["part"] for r in state["response_repairs"]],["actions[0].question"])
+
+    def test_v2_missing_disposition_reason_is_filled_instead_of_rejecting_the_update(self):
+        response={"candidates":[{"ref":"candidate","claim":"There may be an initialization issue."}],"updates":[
+                      {"candidate_id":"C0001","disposition":"withdraw"}],
+                  "actions":[],"next_question":"","stop":True}
+        state=self.run_v2(self.req,response)
+        self.assertEqual(state["protocol_issues"],[])
+        self.assertEqual(state["candidates"][0]["lifecycle"],"withdrawn")
+        self.assertEqual(state["candidate_update_decisions"][0]["proposal"]["reason"],"(model omitted this field)")
+        self.assertEqual([r["part"] for r in state["response_repairs"]],["updates[0].reason"])
+
+    def test_v2_missing_kind_bad_command_or_extra_key_still_rejects(self):
+        cases=[({"ref":"run","input":"1\n-7","question":"Observe."},"unknown action kind"),
+               ({"kind":"run_original","ref":"run","question":"Observe."},"action fields must exactly match protocol"),
+               ({"kind":"run_original","ref":"run","input":"1\n-7","question":"Observe.","expected":"-7\n"},"action fields must exactly match protocol")]
+        for action,reason in cases:
+            with self.subTest(action=action):
+                response={"candidates":[{"kind":"defect_candidate","ref":"candidate","claim":"There may be an initialization issue."}],
+                          "updates":[],"actions":[action],"next_question":"","stop":True}
+                state=self.run_v2(self.req,response)
+                self.assertEqual(state["tool_actions"],[])
+                self.assertTrue(any(reason in x["reason"] for x in state["protocol_issues"]),state["protocol_issues"])
+
     def test_v2_malformed_action_kind_never_discards_readable_candidate(self):
         for bad_kind in ([],{},None,42):
             response={"candidates":[{"kind":"defect_candidate","ref":"candidate","claim":"There may be a boundary defect."}],"updates":[],

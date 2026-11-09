@@ -70,4 +70,5 @@ python validation\bench-100-full-2026-11-09\analyze.py # 与 bench-100-2026-11-0
 ## 后续变更（本快照之后，未做 100 题复测）
 
 - **编辑区间 ±1 行自动纠正**：`v2_apply_edits` 现在以唯一 `old_text` 匹配定位，声明区间与反推区间两端各差不超过 1 行时按文本应用，并把纠正记进 `versions[...].edit_range_repairs` 与动作结果；超过 1 行仍拒，且错误信息会给出真实区间。上面短板 1 因此关闭——用本次被拒的那份 p035 提案回放，新逻辑接受并产出模型想要的修正循环（`i <= n-1`、`den = n-i+1`、`max(0LL, a[0]-y)`）。
+- **提案字段自动补齐**：`v2_response_repairs` 现在除顶层键外，还会补 `actions[i].ref`（生成唯一别名）、`actions[i].question`、`updates[i].reason`，全部记入 `response_repairs`。这三类缺失原本各要花一次澄清调用。用同一次全量的 25 条澄清记录回放：**11 条不再需要澄清**，剩 13 条中 9 条是"整个 kind 缺失"、3 条是 update 键集多余、2 条是 `action`/`arguments` 包装错误。
 - 本快照的 `root_scout.py` **保持原样**，它才是产出上表数字的那一版；新逻辑在仓库主分支的后续提交里，尚未在 100 题规模上重测。
