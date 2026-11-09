@@ -16,6 +16,34 @@ def answer():
     return {"candidates": [], "updates": [], "actions": [], "next_question": "", "stop": True}
 
 
+class CoveragePromptTests(unittest.TestCase):
+    """coverage-v1 keeps the baseline protocol and replaces only the stop rule."""
+
+    def test_coverage_profile_is_the_baseline_text_plus_a_review_scope(self):
+        baseline = core.system_for_phase("EXPLORE_V2", prompt_profile="baseline")
+        coverage = core.system_for_phase("EXPLORE_V2", prompt_profile="coverage-v1")
+        self.assertIn("without forcing extra rounds", baseline)
+        self.assertNotIn("without forcing extra rounds", coverage)
+        self.assertIn("Do not treat the first confirmed defect as the end of the review", coverage)
+        self.assertIn("REVIEW SCOPE", coverage)
+        for name, _meaning in core.COVERAGE_CLASSES:
+            self.assertIn(name, coverage)
+        self.assertEqual(len(core.COVERAGE_CLASSES), 9)
+        # the duplicated out-of-spec paragraph is collapsed to one copy
+        self.assertEqual(coverage.count("Inputs must strictly satisfy all format"), 1)
+        self.assertEqual(baseline.count("Inputs must strictly satisfy all format"), 2)
+
+    def test_coverage_profile_keeps_the_cache_prefix_and_the_plain_call_sites(self):
+        for native in (False, True):
+            self.assertEqual(core.system_for_phase("EXPLORE_V2", native_tool=native, prompt_profile="coverage-v1"),
+                             core.system_for_phase("EXPLORE_V2_CLARIFY", native_tool=native, prompt_profile="coverage-v1"))
+        with patch.dict(os.environ, {"ROOT_SCOUT_PROMPT_PROFILE": "coverage-v1"}, clear=True):
+            self.assertEqual(core.selected_prompt_profile(), "coverage-v1")
+        with patch.dict(os.environ, {"ROOT_SCOUT_PROMPT_PROFILE": "nope"}, clear=True):
+            with self.assertRaisesRegex(ValueError, "must be baseline"):
+                core.selected_prompt_profile()
+
+
 class FocusedPromptTests(unittest.TestCase):
     def test_baseline_is_unchanged_and_clarification_shares_the_prefix(self):
         baseline = core.SYSTEM + " " + core.v2_protocol_text()

@@ -243,8 +243,8 @@ PHASE_SYSTEM = {
 
 def selected_prompt_profile():
     profile=os.environ.get("ROOT_SCOUT_PROMPT_PROFILE","baseline")
-    if profile not in ("baseline","focused-v1"):
-        raise ValueError("ROOT_SCOUT_PROMPT_PROFILE must be baseline or focused-v1")
+    if profile not in ("baseline","focused-v1","coverage-v1"):
+        raise ValueError("ROOT_SCOUT_PROMPT_PROFILE must be baseline, focused-v1 or coverage-v1")
     return profile
 
 
@@ -267,6 +267,45 @@ def focused_v1_protocol_text(native_tool=False):
     return intro+json.dumps(protocol,ensure_ascii=False,separators=(",",":"))+"\n\n"+text
 
 
+COVERAGE_CLASSES = (
+    ("boundary", "boundary and off-by-one indexing, including the smallest legal input"),
+    ("integer-range", "integer range: overflow, signedness, width and truncation"),
+    ("undefined-behaviour", "undefined behaviour: out-of-bounds access, uninitialised reads, invalidated state"),
+    ("modular-arithmetic", "modular arithmetic: reduced exponents, negative remainders, divisibility"),
+    ("carried-state", "state carried across test cases: arrays, bitsets, memo tables, globals not reset"),
+    ("greedy-completeness", "greedy or enumeration completeness: cases a loop bound or filter silently excludes"),
+    ("floating-point", "floating point: absolute tolerance, rounding at an exact boundary, doubles compared to integers"),
+    ("io-format", "input and output format: separators, trailing whitespace, token counts"),
+    ("complexity", "complexity: a bound that admits a time limit on legal input"),
+)
+
+def coverage_v1_protocol_text(native_tool=False):
+    """Baseline protocol, with the review-completeness rule instead of the stop-at-first rule."""
+    text=v2_protocol_text()
+    first_hit=("choose a discriminating action or revise/merge/downgrade when evidence is mixed, "
+               "without forcing extra rounds.")
+    replacement=("choose a discriminating action or revise/merge/downgrade when evidence is mixed. "
+                 "Do not treat the first confirmed defect as the end of the review.")
+    if first_hit not in text:
+        raise ValueError("baseline protocol text changed; coverage-v1 edit no longer applies")
+    text=text.replace(first_hit,replacement)
+    # The out-of-spec paragraph is duplicated verbatim in the baseline text; keeping one copy.
+    para=("Inputs must strictly satisfy all format and domain guarantees in the problem statement; "
+          "do not test or assume out-of-spec format deviations (e.g. single-line inputs broken across lines). "
+          "An anomaly triggered only by out-of-spec inputs or format violations is not a program defect and "
+          "must be withdrawn, not retained as an active candidate. ")
+    if text.count(para)==2:
+        text=text.replace(para+para,para)
+    checklist=" ".join(f"{index}) {name}: {meaning}." for index,(name,meaning) in enumerate(COVERAGE_CLASSES,1))
+    text+=(" REVIEW SCOPE. This is an audit of one submission, not a search for one defect: a confirmed defect does not "
+           "end the review. Before any response may set stop=true, every failure class below must be either cleared by "
+           "an observation already in the transcript or carried by its own candidate. "+checklist+
+           " Work them in that order; earlier classes occur in wrong submissions more often. Clearing a class costs one "
+           "line of reasoning plus at most one observation, and a class that existing evidence already settles must not "
+           "get a separate probe. If a class is neither cleared nor carried by a candidate, name it in next_question "
+           "and keep going.")
+    return text
+
 def system_for_phase(phase, *, native_tool=False, prompt_profile=None):
     # A clarification call must keep this text byte-identical to the exploration
     # turn it repairs: the system prompt is the cache prefix, so appending even one
@@ -274,9 +313,12 @@ def system_for_phase(phase, *, native_tool=False, prompt_profile=None):
     # clarification scope is carried by v2_clarification_prompt instead.
     if phase in ("EXPLORE_V2","EXPLORE_V2_CLARIFY"):
         profile=selected_prompt_profile() if prompt_profile is None else prompt_profile
-        if profile not in ("baseline","focused-v1"):
+        if profile not in ("baseline","focused-v1","coverage-v1"):
             raise ValueError("unknown prompt profile: "+str(profile))
-        return SYSTEM + " " + (focused_v1_protocol_text(native_tool) if profile=="focused-v1" else v2_protocol_text())
+        if profile=="focused-v1": text=focused_v1_protocol_text(native_tool)
+        elif profile=="coverage-v1": text=coverage_v1_protocol_text(native_tool)
+        else: text=v2_protocol_text()
+        return SYSTEM + " " + text
     return SYSTEM + " " + PHASE_SYSTEM.get(phase, "Output only the JSON object specified by the current phase instructions.")
 
 def model_error_class(exc):
