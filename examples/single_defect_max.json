@@ -1,0 +1,26 @@
+{
+  "statement": "给定 n 个整数，求这 n 个整数中的最大值。\n\n输入格式：输入仅包含一组数据。第一行是一个整数 n（1<=n<=100000）。第二行包含 n 个整数 a[1], a[2], ..., a[n]，相邻两个整数之间用一个空格分隔。\n\n约束：-1000000000<=a[i]<=1000000000，数组元素可以为负数。\n\n输出格式：输出一个整数，表示这 n 个整数中的最大值。\n\n样例输入\n```text\n3\n-5 -2 -9\n```\n样例输出\n```text\n-2\n```",
+  "source": "#include <iostream>\nusing namespace std;\nint main(){\n    int n;\n    cin >> n;\n    int best = 0;\n    for (int i = 0; i < n; ++i) {\n        int a;\n        cin >> a;\n        if (a > best) best = a;\n    }\n    cout << best << '\\n';\n    return 0;\n}\n",
+  "language": "cpp17",
+  "environment": {
+    "time_limit_ms": 3000
+  },
+  "known_failing_tests": [
+    {
+      "input": "4\n-1 -2 -3 -4\n",
+      "expected": "-1\n",
+      "trusted": true,
+      "expected_source": "手工按题意计算：四个负数中的最大值为 -1",
+      "legal_input": true,
+      "legal_input_source": "n=4，a[i] 均在 [-1000000000,1000000000] 内"
+    },
+    {
+      "input": "3\n-5 2 -9\n",
+      "expected": "2\n",
+      "trusted": true,
+      "expected_source": "手工按题意计算：三个数中的最大值为 2",
+      "legal_input": true,
+      "legal_input_source": "n=3，a[i] 均在约束范围内"
+    }
+  ]
+}

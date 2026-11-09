@@ -1,0 +1,24 @@
+{
+  "statement": "Given n integers, output their maximum. The first line contains n (1 <= n <= 8). The second line contains n integers in [-100,100]. Output the maximum integer.",
+  "source": "n = int(input())\nvalues = list(map(int, input().split()))\nbest = 0\nfor value in values:\n    best = max(best, value)\nprint(best)\n",
+  "language": "python3",
+  "environment": {"time_limit_ms": 3000},
+  "known_failing_tests": [
+    {
+      "input": "2\n-4 -2\n",
+      "expected": "-2\n",
+      "trusted": true,
+      "expected_source": "reviewed maximum of -4 and -2",
+      "legal_input": true,
+      "legal_input_source": "n=2; both values are within [-100,100]"
+    },
+    {
+      "input": "2\n-4 2\n",
+      "expected": "2\n",
+      "trusted": true,
+      "expected_source": "reviewed maximum of -4 and 2; baseline control",
+      "legal_input": true,
+      "legal_input_source": "n=2; both values are within [-100,100]"
+    }
+  ]
+}

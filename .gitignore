@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+run/
+replay/
+root-scout-report/
+root-scout-replay/
+validation/
+.root-scout/
+tmp_*.py
+
+# demo app checkouts are their own repositories
+demo_apps/agent_native_ws/
+demo_apps/biz_native_ws/
+demo_apps/cachetools/
+demo_apps/cachetools_native/
+demo_apps/ecommerce_base/

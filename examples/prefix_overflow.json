@@ -1,0 +1,10 @@
+{
+  "statement": "给定 n 个非负整数，回答闭区间 [l,r] 的元素和。数组下标从 1 开始，闭区间包含左右两个端点。\n\n输入格式：输入仅包含一组数据。第一行是两个整数 n 和 q。第二行包含 n 个整数 a[1], a[2], ..., a[n]。接下来 q 行，每行是两个整数 l 和 r，表示一次查询。\n\n约束：1<=n,q<=200000，0<=a[i]<=1000000000，所有查询均满足 1<=l<=r<=n。\n\n输出格式：按照查询顺序，每行输出一个查询的精确整数和，不取模。\n\n样例输入\n```text\n1 1\n7\n1 1\n```\n样例输出\n```text\n7\n```",
+  "source": "#include <iostream>\n#include <vector>\nusing namespace std;\nint main(){int n,q;cin>>n>>q;vector<int> p(n+1);for(int i=1;i<=n;i++){int a;cin>>a;p[i]=p[i-1]+a;}while(q--){int l,r;cin>>l>>r;cout<<p[r]-p[l]<<'\\n';}}",
+  "language": "cpp17",
+  "environment": {"compiler": "g++", "compile_flags": "-O2", "time_limit_ms": 3000},
+  "known_failing_tests": [
+    {"input": "1 1\n7\n1 1\n", "expected": "7\n", "trusted": true, "expected_source": "手工按题意计算：单点闭区间和为 7", "legal_input": true, "legal_input_source": "n=q=1，符合题面约束"},
+    {"input": "4 1\n0 1000000000 1000000000 1000000000\n1 4\n", "expected": "3000000000\n", "trusted": true, "expected_source": "手工按题意计算：四项总和为 3000000000", "legal_input": true, "legal_input_source": "n=4，q=1，所有元素符合题面约束"}
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "statement": "给定两个整数 a 和 b，求它们的和。\n\n输入格式：输入仅包含一组数据。一行包含两个整数 a 和 b，用一个空格分隔。\n\n约束：-1000000000<=a,b<=1000000000。\n\n输出格式：输出一个整数，表示 a+b 的值。\n\n样例输入\n```text\n2 3\n```\n样例输出\n```text\n5\n```",
+  "source": "#include <iostream>\nint main(){\n    long long a, b;\n    std::cin >> a >> b;\n    std::cout << a + b << '\\n';\n    return 0;\n}\n",
+  "language": "cpp17",
+  "environment": {
+    "time_limit_ms": 3000
+  },
+  "known_failing_tests": [
+    {
+      "input": "1000000000 1000000000\n",
+      "expected": "2000000000\n",
+      "trusted": true,
+      "expected_source": "手工按题意计算：两个 10^9 之和为 2000000000",
+      "legal_input": true,
+      "legal_input_source": "a=b=1000000000，均在约束范围内"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "statement": "Given n integers, output their maximum. Constraints: 1<=n<=200000; -1000000000<=a[i]<=1000000000",
+  "source": "n,*a=map(int,__import__('sys').stdin.buffer.read().split())\na=a[:n]\nbest=0\nfor x in a:\n if x>best: best=x\nprint(best)",
+  "language": "python3",
+  "known_failing_tests": [],
+  "oracle_tool_contract": {
+    "kind": "max.v1",
+    "version": 1,
+    "caller_attested": true,
+    "reviewed_by": "example author",
+    "statement_sha256": "29f78a2204c63abff9810f87ab8f8c687b529f1d72b0ec8b2fc00657b8735fac",
+    "statement_quote": "Given n integers, output their maximum.",
+    "semantics": "output the maximum of the n input integers",
+    "input_format": "n; n integer values",
+    "domain": {
+      "n_min": 1,
+      "n_max": 200000,
+      "value_min": -1000000000,
+      "value_max": 1000000000
+    },
+    "domain_quote": "1<=n<=200000; -1000000000<=a[i]<=1000000000"
+  }
+}
