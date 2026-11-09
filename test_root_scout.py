@@ -2682,6 +2682,47 @@ class V2DiscoveryTests(unittest.TestCase):
         self.assertTrue(all(x["evidence_links"][0]["association_kind"]=="joint_candidates" for x in state["candidates"]))
         self.assertEqual(root_scout.verify_saved_case_state(state),state)
 
+    def test_v2_edit_range_off_by_one_is_repaired_from_the_text(self):
+        # The unique old_text match locates the edit; a one-line slip in the declared
+        # range is repaired and recorded instead of destroying the run.
+        response={"candidates":[{"kind":"defect_candidate","ref":"init","claim":"The sentinel may be too high for all-negative input."}],"updates":[],
+                  "actions":[{"kind":"run_variant","ref":"fix","parent_version_id":"original","candidate_refs":["init"],
+                              "edits":[{"start_line":2,"end_line":3,"old_text":"best=0","new_text":"best=-1000000001"}],
+                              "input_refs":[],"inputs":["1\n-7"],"question":"Try the repaired sentinel."}],
+                  "next_question":"","stop":True}
+        state=self.run_v2(self.req,response)
+        action=state["tool_actions"][0]
+        self.assertEqual(action["status"],"accepted",action.get("blocked_reason"))
+        version=state["versions"][action["version_id"]]
+        self.assertEqual(version["edit_range_repairs"],[{"edit_index":0,"declared":[2,3],"actual":[3,3],
+            "reason":"declared line range was off by at most one line; the unique old_text match located the edit"}])
+        self.assertEqual(action["result"]["edit_range_repairs"],version["edit_range_repairs"])
+        self.assertIn("best=-1000000001",version["source"])
+        self.assertEqual(root_scout.verify_saved_case_state(state),state)
+        forged=copy.deepcopy(state)
+        forged["versions"][action["version_id"]]["edit_range_repairs"][0]["actual"]=[2,3]
+        forged["integrity"]=root_scout.v2_integrity(forged)
+        with self.assertRaisesRegex(ValueError,"edit range repairs do not recompute"):
+            root_scout.verify_saved_case_state(forged)
+
+    def test_v2_edit_range_beyond_one_line_is_still_rejected_and_names_the_real_range(self):
+        response={"candidates":[{"kind":"defect_candidate","ref":"init","claim":"The sentinel may be too high."}],"updates":[],
+                  "actions":[{"kind":"run_variant","ref":"fix","parent_version_id":"original","candidate_refs":["init"],
+                              "edits":[{"start_line":6,"end_line":6,"old_text":"best=0","new_text":"best=-1000000001"}],
+                              "input_refs":[],"inputs":["1\n-7"],"question":"Try the sentinel variant."}],
+                  "next_question":"","stop":True}
+        state=self.run_v2(self.req,response)
+        action=state["tool_actions"][0]
+        self.assertEqual(action["status"],"rejected")
+        self.assertIn("matches lines 3-3",action["blocked_reason"])
+        self.assertIn("declared 6-6",action["blocked_reason"])
+
+    def test_v2_ambiguous_old_text_is_never_relocated(self):
+        with self.assertRaisesRegex(ValueError,"old_text must match exactly once"):
+            root_scout.v2_apply_edits("a=1\nb=2\na=1\n",[{"start_line":2,"end_line":2,"old_text":"a=1","new_text":"a=9"}])
+        with self.assertRaisesRegex(ValueError,"old_text must match exactly once"):
+            root_scout.v2_apply_edits("a=1\nb=2\n",[{"start_line":1,"end_line":1,"old_text":"zzz","new_text":"a=9"}])
+
     def test_v2_unknown_candidate_ref_creates_one_rejected_action_and_keeps_claim(self):
         response={"candidates":[{"kind":"defect_candidate","ref":"known","claim":"A claim survives a bad action reference."}],"updates":[],
                   "actions":[{"kind":"run_variant","ref":"bad-ref","parent_version_id":"original","candidate_refs":["missing"],

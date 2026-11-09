@@ -3771,13 +3771,24 @@ def diagnose_causal(req, provider="model", checkpoint_path=None, replay_state=No
 
 V2_MAX_TURNS=4
 
-def v2_apply_edits(source, edits):
+def v2_apply_edits(source, edits, repairs=None):
     spans=[]
-    for edit in edits:
+    for index,edit in enumerate(edits):
         old=edit["old_text"]; start=source.find(old)
         if start<0 or source.find(old,start+1)>=0: raise ValueError("old_text must match exactly once in parent source")
         end=start+len(old); actual_start=source.count("\n",0,start)+1; actual_end=source.count("\n",0,max(start,end-1))+1
-        if (actual_start,actual_end)!=(edit["start_line"],edit["end_line"]): raise ValueError("edit line range does not match exact source text")
+        if (actual_start,actual_end)!=(edit["start_line"],edit["end_line"]):
+            # The unique old_text match is what locates the edit; the declared range is a
+            # redundant assertion about where the model thinks the passage sits. A one-line
+            # slip on either end is repaired from the text and recorded, and nothing wider:
+            # a truncated old_text cannot smuggle the edit to a different passage.
+            declared=(edit["start_line"],edit["end_line"])
+            if abs(actual_start-declared[0])<=1 and abs(actual_end-declared[1])<=1:
+                if repairs is not None:
+                    repairs.append({"edit_index":index,"declared":[declared[0],declared[1]],"actual":[actual_start,actual_end],
+                                    "reason":"declared line range was off by at most one line; the unique old_text match located the edit"})
+            else:
+                raise ValueError(f"edit line range does not match exact source text: old_text matches lines {actual_start}-{actual_end}, declared {declared[0]}-{declared[1]}")
         spans.append((start,end,edit))
     spans.sort()
     if any(spans[i][0]<spans[i-1][1] for i in range(1,len(spans))): raise ValueError("variant edits overlap")
@@ -4000,9 +4011,11 @@ def v2_execute_action(req,state,action,aliases,run_env,preflight,budget,build_ca
         elif kind=="run_variant":
             parent=state["versions"].get(raw["parent_version_id"])
             if not parent: raise ValueError("unknown parent source version")
-            new_source=v2_apply_edits(parent["source"],raw["edits"])
+            repairs=[]
+            new_source=v2_apply_edits(parent["source"],raw["edits"],repairs)
             version_id=f"V{len(state['versions'])}"
             version={"id":version_id,"parent_version_id":parent["id"],"parent_source_sha256":parent["source_sha256"],"source":new_source,"source_sha256":sha(new_source),"edits":copy.deepcopy(raw["edits"]),"candidate_ids":linked,"action_id":action_id}
+            if repairs: version["edit_range_repairs"]=repairs
             state["versions"][version_id]=version
             cases=[]
             for eid in raw["input_refs"]:
@@ -4030,6 +4043,7 @@ def v2_execute_action(req,state,action,aliases,run_env,preflight,budget,build_ca
                     "original_matched":base_result.get("matched") if baseline.get("trusted_expected") else None,
                     "variant_matched":vr.get("matched"),"stdout_changed":base_result.get("stdout")!=vr.get("stdout") if base_result.get("status")=="ok" and vr.get("status")=="ok" else None})
             record["version_id"]=version_id; record["result"]={"observations":observations,"source_sha256":version["source_sha256"]}
+            if repairs: record["result"]["edit_range_repairs"]=repairs
             if not observations: record["status"]="blocked"; record["blocked_reason"]="no input reference or proposal was available"
     except Exception as exc:
         record["status"]="blocked" if isinstance(exc,(OSError,subprocess.SubprocessError)) else "rejected"; record["blocked_reason"]=str(exc); record["result"]={"error_type":type(exc).__name__}
@@ -4337,9 +4351,12 @@ def verify_v2_case_state(data):
         parent=versions.get(version.get("parent_version_id"))
         if not parent or version.get("parent_source_sha256")!=sha(parent.get("source","")):
             raise ValueError("v2 variant parent binding is invalid")
-        rebuilt=v2_apply_edits(parent["source"],version.get("edits",[]))
+        rebuilt_repairs=[]
+        rebuilt=v2_apply_edits(parent["source"],version.get("edits",[]),rebuilt_repairs)
         if rebuilt!=version.get("source") or sha(rebuilt)!=version.get("source_sha256"):
             raise ValueError("v2 variant source does not recompute")
+        if (version.get("edit_range_repairs") or [])!=rebuilt_repairs:
+            raise ValueError("v2 variant edit range repairs do not recompute")
     evidence=data.get("evidence",[]); by_id={}
     trusted_initial={(x["input"],x["expected"],x.get("source_kind"),x.get("expected_source")) for x in initial}
     initial_inputs={x.get("input") for x in expected_plan}
