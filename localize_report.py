@@ -25,6 +25,7 @@ LOC_TEXT = {"located_with_line": "已指认到可用行号", "located_coarse_lin
             "no_finding": "未发现缺陷"}
 
 STOP_TEXT = {
+    "defect_reproduced": "已复现：受信 expected 不符",
     "oracle_unresolved": "已给出定位，但没有取得受信 expected",
     "no_bug_found_within_scope": "未发现缺陷",
     "model_protocol_incomplete": "已给出定位，但本次运行协议未完整收尾",
@@ -107,9 +108,7 @@ def report(case_id):
     problem = (state.get("request_snapshot") or {}).get("environment", {}).get("problem_id", "")
     ev = evidence_index(state)
     acts = {a["id"]: a for a in state.get("tool_actions", []) if isinstance(a, dict)}
-    loc = state.get("localization") or {}
-    if not loc and core is not None:
-        loc = core.v2_localization(state)
+    loc = core.v2_localization(state) if core is not None else (state.get("localization") or {})
     calls = [c for c in state["budget"]["calls"] if c.get("status") not in ("rejected", "skipped")]
 
     active = [c for c in state["candidates"] if c["lifecycle"] not in ("withdrawn", "merged")
@@ -142,6 +141,12 @@ def report(case_id):
     if loc:
         lines += [f"定位状态：**{LOC_TEXT.get(loc.get('status'), loc.get('status'))}**"
                   f"（最佳证据：{loc.get('best_evidence') or '无'}，主指针：{loc.get('primary_candidate_id') or '无'}）", ""]
+        case = loc.get("reproduced_case") if loc.get("reproduced") else None
+        if isinstance(case, dict):
+            stdin = (case.get("input") or "").replace("\n", " ⏎ ")[:120]
+            lines += [f"- **反例**：输入 `{stdin}` → 你的输出 `{(case.get('stdout') or '').strip()[:40]}`，"
+                      f"期望 `{(case.get('expected') or '').strip()[:40]}`"
+                      f"（{case.get('expected_source') or '受信 expected'}，{case.get('evidence_id')}）", ""]
     trusted = (state.get("coverage") or {}).get("trusted_test_count") or {}
     if trusted.get("available"):
         lines += [f"给定测试：{trusted.get('executed', 0)}/{trusted['available']} 已执行，"

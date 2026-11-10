@@ -90,7 +90,7 @@ CLI (diagnose / replay / doctor)
 | `v2_response_repairs()` | 顶层键补齐、`kind` 推断、`arguments` 信封解包、`ref`/`question`/`reason` 补齐 |
 | `v2_incomplete_protocol()` / `v2_tolerated_issue_turns()` | 协议失败与"收尾容忍"的判定 |
 | `v2_site_check()` / `v2_quote_span()` / `v2_resolve_locations()` | 位置校验与"引用原文→行号"解析 |
-| `v2_localization()` | 定位状态、站点排序、主指针、证据等级 |
+| `v2_localization()` | 定位状态、站点排序、主指针、证据等级；`reproduced` / `reproduced_case` 携带受信反例 |
 | `verify_saved_case_state()` | 全量重算校验（改动状态结构后必须加测试覆盖） |
 | `native_transport.py` / `native_adapter.py` | SSE 传输、tool call、reasoning 透传；`ROOT_SCOUT_TRACE_DIR` 可落盘原始 reasoning |
 | `localize_report.py` | 定位式报告渲染（只读 CaseState，不调模型） |
@@ -143,7 +143,7 @@ CLI (diagnose / replay / doctor)
 | # | 问题 | 证据 | 影响 |
 |---|---|---|---|
 | 1 | **位置漂移**：同题复跑指到不同行 | p091 78 → 38–84 | 无法承诺单行定位 |
-| 2 | **受信不符被判成"未决"** | `matched is False` → `oracle_unresolved` | A 模式 8/10 落在这个名字上，语义反了 |
+| 2 | ~~受信不符被判成"未决"~~ **已修（2026-11-10）** | 现在判 `defect_reproduced`；协议失败仍优先占标签，但 `localization.reproduced` / `reproduced_case` 会保留反例本身 | 报告第一行直接给"输入 / 你的输出 / 期望" |
 | 3 | **被拒动作没有认领通道** | p035/p025 的 `run_variant` 行区间差一行；p049/p095 的 A0007/A0001 | 一次单点错误直接毁掉整条结论 |
 | 4 | kind 标签抖动 | p037 硬反例写成 `unclassified`；p089 写成 `resource_concern` | 严格口径对标签过敏 |
 | 5 | "真 UB 但不改输出"无维度 | p061 | 只能记成 control 警报 |

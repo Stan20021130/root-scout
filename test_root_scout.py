@@ -1940,6 +1940,34 @@ class V2DiscoveryTests(unittest.TestCase):
         self.assertIn("C_raw / C_store / C_deliver",report)
         self.assertEqual(root_scout.verify_saved_case_state(state),state)
 
+    def test_v2_trusted_mismatch_is_a_reproduced_defect_not_an_unresolved_one(self):
+        def wrong(_source,_language,_case,_env,profile="formal",build_cache=None):
+            return {"status":"ok","stdout":"999\n","stderr":"","returncode":0,"wall_seconds":0.01,
+                    "profile":profile,"matched":False}
+        response={"candidates":[{"kind":"defect_candidate","ref":"c","claim":"The accumulator may be wrong.","locations":["line 3"]}],
+                  "updates":[],"actions":[],"next_question":"","stop":True}
+        state=self.run_v2(self.req,response,runner=wrong)
+        self.assertGreaterEqual(state["coverage"]["trusted_test_count"]["mismatches"],1)
+        self.assertEqual(state["stop_reason"],"defect_reproduced")
+        self.assertEqual(root_scout.verify_saved_case_state(state),state)
+
+    def test_v2_reproduced_defect_stays_visible_when_a_protocol_failure_wins(self):
+        # A protocol failure keeps the label, but the reproduction is never lost.
+        def wrong(_source,_language,_case,_env,profile="formal",build_cache=None):
+            return {"status":"ok","stdout":"999\n","stderr":"","returncode":0,"wall_seconds":0.01,
+                    "profile":profile,"matched":False}
+        response={"candidates":[{"kind":"defect_candidate","ref":"c","claim":"The accumulator may be wrong.","locations":["line 3"]}],
+                  "updates":[],"actions":[{"kind":"run_original","ref":"probe","input":"1\n-7","question":"observe",
+                                           "candidate_refs":["unknown-ref"]}],
+                  "next_question":"","stop":True}
+        state=self.run_v2(self.req,response,runner=wrong)
+        self.assertEqual([a["status"] for a in state["tool_actions"]],["rejected"])
+        self.assertEqual(state["stop_reason"],"model_protocol_incomplete")
+        self.assertGreaterEqual(state["coverage"]["trusted_test_count"]["mismatches"],1)
+        self.assertTrue(state["localization"]["reproduced"])
+        self.assertEqual(state["localization"]["reproduced_case"]["stdout"],"999\n")
+        self.assertEqual(root_scout.verify_saved_case_state(state),state)
+
     def test_v2_missing_action_alias_is_filled_instead_of_costing_a_clarification(self):
         response={"candidates":[{"ref":"candidate","claim":"There may be an initialization issue."}],"updates":[],
                   "actions":[{"kind":"run_original","input":"1\n-7","question":"Observe the negative singleton."}],

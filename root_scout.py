@@ -81,7 +81,7 @@ def model_budget_configuration():
             "reasoning_effort":reasoning,"reasoning_policy":reasoning_policy,
             "input_reservation":"full UTF-8 request bytes until server usage is reported",
             "stream_output_observation_threshold_tokens":STREAM_OUTPUT_OBSERVATION_TOKENS}
-STOP_REASONS={"completed_with_evidence","no_bug_found_within_scope","oracle_unresolved","environment_blocked","budget_exhausted","replay_environment_mismatch","interrupted","failed"}
+STOP_REASONS={"completed_with_evidence","no_bug_found_within_scope","oracle_unresolved","defect_reproduced","environment_blocked","budget_exhausted","replay_environment_mismatch","interrupted","failed"}
 V2_PROTOCOL={
     "required_response":["candidates","updates","actions","next_question","stop"],
     "optional_response":["invariants","established_invariants"],
@@ -317,8 +317,18 @@ def v2_localization(state):
     elif any(s["site_check"]=="coarse_site" for s in sites): status="located_coarse_line"
     elif any(s["site_check"]=="weak_site" for s in sites): status="located_weak_line"
     else: status="located_without_line"
+    # The card's headline comes from the submission, not from what the model chose to cite.
+    reproduced=[]
+    for record in state.get("evidence",[]):
+        if not isinstance(record,dict): continue
+        result=record.get("result") or {}
+        if record.get("trusted_expected") and result.get("matched") is False and result.get("status")=="ok":
+            reproduced.append({"evidence_id":record.get("id"),"input":record.get("input",""),
+                               "expected":record.get("expected",""),"stdout":result.get("stdout",""),
+                               "expected_source":record.get("expected_source")})
     return {"status":status,"sites":ranked,"primary_candidate_id":ranked[0]["candidate_id"] if ranked else None,
-            "best_evidence":ranked[0]["evidence"] if ranked else None}
+            "best_evidence":ranked[0]["evidence"] if ranked else None,
+            "reproduced":bool(reproduced),"reproduced_case":reproduced[0] if reproduced else None}
 
 def v2_validate_response_for_state(state,response,turn,version):
     parsed=validate_v2_response(response,version)
@@ -4649,7 +4659,7 @@ def verify_v2_case_state(data):
         if kind=="correctness_coverage" and summary!={"status":finite_status,"basis":"all executed original trusted tests; finite observation only, not a correctness proof"}: raise ValueError("v2 coverage candidate status does not recompute")
         if kind=="resource_concern" and summary!={"status":"unverified","basis":"resource/performance measurements are outside this run"}: raise ValueError("v2 resource claim must remain unverified")
         if kind=="environment_assumption" and summary!={"status":"unverified","basis":"environment interpretation is a model claim unless a tool action directly checks it"}: raise ValueError("v2 environment claim must remain unverified")
-    allowed_stops={"no_bug_found_within_scope","oracle_unresolved","environment_blocked","budget_exhausted","interrupted","failed","model_protocol_incomplete","replay_completed","replay_without_saved_actions","feedback_limit_reached"}
+    allowed_stops={"no_bug_found_within_scope","oracle_unresolved","defect_reproduced","environment_blocked","budget_exhausted","interrupted","failed","model_protocol_incomplete","replay_completed","replay_without_saved_actions","feedback_limit_reached"}
     if data.get("stop_reason") not in allowed_stops: raise ValueError("v2 stop reason is not recognized")
     incomplete_protocol=bool(v2_incomplete_protocol(data)) if schema_version>=5 else bool(data.get("protocol_issues"))
     if data.get("stop_reason")=="no_bug_found_within_scope" and (expected_unresolved or expected_status!="no_failure_observed" or incomplete_protocol or data.get("analysis_errors") or data.get("coverage",{}).get("execution_failures") or (data.get("reasoning_routing",{}).get("applied") and data.get("reasoning_routing",{}).get("low_review_status")!="completed")):
@@ -5132,8 +5142,14 @@ def diagnose_v2(req,provider="model",checkpoint_path=None,replay_state=None,stra
     if stop_reason not in ("budget_exhausted","environment_blocked","interrupted","failed","model_protocol_incomplete","replay_without_saved_actions"):
         tc=state["coverage"]["trusted_test_count"]
         incomplete_protocol=bool(v2_incomplete_protocol(state)) if protocol_schema>=5 else bool(state["protocol_issues"])
+        # A caller-trusted mismatch is a fact about the submission, so it is reported as
+        # reproduced rather than unresolved. A protocol failure still wins the label, but the
+        # mismatch itself stays visible in coverage and in the localisation evidence grade.
+        reproduced=any(e.get("trusted_expected") and (e.get("result") or {}).get("matched") is False
+                       and (e.get("result") or {}).get("status")=="ok" for e in state["evidence"])
         if state["analysis_errors"] or incomplete_protocol or any(x.get("status")=="rejected" for x in state["tool_actions"]): stop_reason="model_protocol_incomplete"
         elif reasoning_policy_applied and reasoning_routing.get("low_review_status")!="completed": stop_reason="model_protocol_incomplete"
+        elif reproduced: stop_reason="defect_reproduced"
         elif any(e["result"].get("status")!="ok" for e in state["evidence"]) or any(e.get("trusted_expected") and e["result"].get("matched") is False for e in state["evidence"]) or state["coverage"]["unresolved_candidate_ids"] or tc["available"]==0 or tc["executed"]<tc["available"]:
             stop_reason="oracle_unresolved"
     state["localization"]=v2_localization(state)
