@@ -26,7 +26,7 @@ LOC_TEXT = {"located_with_line": "已指认到可用行号", "located_coarse_lin
 
 STOP_TEXT = {
     "defect_reproduced": "已复现：受信 expected 不符",
-    "oracle_unresolved": "已给出定位，但没有取得受信 expected",
+    "oracle_unresolved": "仍有未验证的比较或定位线索",
     "no_bug_found_within_scope": "未发现缺陷",
     "model_protocol_incomplete": "已给出定位，但本次运行协议未完整收尾",
     "budget_exhausted": "预算耗尽，定位可能不完整",
@@ -87,16 +87,15 @@ def grade(candidate, ev_by_id, actions_by_id=None):
     ids = [i for i in (candidate.get("current_evidence_ids") or [])]
     records = [ev_by_id[i] for i in ids if i in ev_by_id]
     acted = [actions_by_id[i] for i in ids if i in actions_by_id and actions_by_id[i].get("status") == "accepted"]
-    trusted_mismatch = [r for r in records
-                        if r.get("trusted_expected") and (r.get("result") or {}).get("matched") is False
-                        and (r.get("result") or {}).get("status") == "ok"]
+    trusted_mismatch = [r for r in records if r.get("version_id") == "original" and core is not None
+                        and core.probe_match(r) is False]
     observed = [r for r in records if (r.get("result") or {}).get("status") == "ok"]
     ran = [a for a in acted if isinstance((a.get("result") or {}), dict)
            and any(k in (a.get("result") or {}) for k in ("stdout", "observations"))]
     if trusted_mismatch:
         return 3, "受信 expected 不符"
     if observed or ran:
-        return 2, "沙箱观测（无受信期望）"
+        return 2, "沙箱观测（未证明原程序不符）"
     if ids:
         return 1, "证据引用存在，但无成功执行"
     return 0, "仅静态推理，未验证"
@@ -149,11 +148,16 @@ def report(case_id):
                       f"（{case.get('expected_source') or '受信 expected'}，{case.get('evidence_id')}）", ""]
     trusted = (state.get("coverage") or {}).get("trusted_test_count") or {}
     if trusted.get("available"):
+        probe = core.probe_result(state) if core is not None else {}
+        mismatches = (probe.get("summary") or {}).get("counterexamples", 0)
+        comparison_pending = "output_comparison_unspecified" in (probe.get("scope") or {}).get("gaps", [])
+        result_note = ("存在失败的受信用例" if mismatches else
+                       "输出存在空白或大小写差异，评测比较规则尚未确认" if comparison_pending else
+                       "**没有可复现的失败用例**，以下定位全部来自算法推理与自建对照")
         lines += [f"给定测试：{trusted.get('executed', 0)}/{trusted['available']} 已执行，"
-                  f"{trusted.get('mismatches', 0)} 处不符 —— "
-                  f"{'**没有可复现的失败用例**，以下定位全部来自算法推理与自建对照' if not trusted.get('mismatches') else '存在失败的受信用例'}", ""]
+                  f"{mismatches} 处已确认不符 —— {result_note}", ""]
     if not groups:
-        lines += [f"**结论**：未定位到缺陷（{STOP_TEXT.get(state['stop_reason'], state['stop_reason'])}）", ""]
+        lines += [f"**结论**：尚未得到可用定位（{STOP_TEXT.get(state['stop_reason'], state['stop_reason'])}）", ""]
     for rank, group in enumerate(groups):
         head = group["head"]
         _, label = grade(head, ev, acts)
@@ -212,11 +216,12 @@ def report(case_id):
             record = ev.get(ev_id)
             if record and isinstance(record.get("input"), str) and record["input"].strip():
                 stdout = (record.get("result") or {}).get("stdout", "")
-                inputs.append((ev_id, record["input"], stdout))
+                inputs.append((ev_id, record.get("version_id"), record["input"], stdout))
         if inputs:
-            lines.append("- 复现输入（来自证据记录）：")
-            for ev_id, stdin, stdout in inputs[:2]:
-                lines.append(f"  - `{ev_id}` 输入 `{stdin.strip()[:80]}` → 输出 `{stdout.strip()[:60]}`")
+            lines.append("- 证据中的输入与输出：")
+            for ev_id, version_id, stdin, stdout in inputs[:2]:
+                version = "原程序" if version_id == "original" else f"变体 {version_id}" if version_id else "程序版本未知"
+                lines.append(f"  - `{ev_id}`（{version}）输入 `{stdin.strip()[:80]}` → 输出 `{stdout.strip()[:60]}`")
         others = [c for c in group["members"] if c["id"] != head["id"]]
         if others:
             lines.append("- 同一位置的其他解释：")

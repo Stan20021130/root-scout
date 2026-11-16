@@ -211,6 +211,33 @@ def v2_tolerated_issue_turns(state):
     unresolved=v2_protocol_state(state)["unresolved_issue_turns"]
     return [turn for turn in unresolved if turn not in v2_incomplete_protocol(state)]
 
+def v2_action_rejection_is_unresolved(state,record):
+    """A rejected action blocks the verdict only while nothing replaced it.
+
+    Rejection is a model-side proposal error, not a controller failure: the record
+    stays in the ledger, its candidate links carry no evidence, and everything that
+    did execute still counts. A later accepted action of the same kind is the
+    replacement the repair turn asks for.
+    """
+    if record.get("status")!="rejected": return False
+    if record.get("repair_status")=="repaired": return False
+    kind=record.get("kind"); turn=record.get("turn") or 0
+    return not any(other is not record and other.get("status")=="accepted" and other.get("kind")==kind
+                   and (other.get("turn") or 0)>turn for other in state.get("tool_actions",[]))
+
+def v2_unresolved_rejections(state):
+    return [x for x in state.get("tool_actions",[]) if v2_action_rejection_is_unresolved(state,x)]
+
+def v2_mark_repaired_actions(state):
+    """Record which rejected proposal a later accepted action replaced."""
+    for record in state.get("tool_actions",[]):
+        if record.get("status")!="rejected" or record.get("repair_status"): continue
+        if v2_action_rejection_is_unresolved(state,record): continue
+        replacement=next((x for x in state.get("tool_actions",[]) if x is not record and x.get("status")=="accepted"
+                          and x.get("kind")==record.get("kind") and (x.get("turn") or 0)>(record.get("turn") or 0)),None)
+        record["repair_status"]="repaired"
+        record["repaired_by_action_id"]=replacement.get("id") if replacement else None
+
 def v2_normalize_claim(text):
     return re.sub(r"\s+"," ",(text or "").strip())
 
@@ -288,8 +315,7 @@ def v2_evidence_grade(state, candidate):
     actions={a.get("id"):a for a in state.get("tool_actions",[]) if isinstance(a,dict)}
     ids=list(candidate.get("current_evidence_ids") or [])
     records=[evidence[i] for i in ids if i in evidence]
-    if any(r.get("trusted_expected") and (r.get("result") or {}).get("matched") is False
-           and (r.get("result") or {}).get("status")=="ok" for r in records): return "trusted_mismatch"
+    if any(r.get("version_id")=="original" and probe_match(r) is False for r in records): return "trusted_mismatch"
     if any((r.get("result") or {}).get("status")=="ok" for r in records): return "sandbox_observation"
     for i in ids:
         action=actions.get(i)
@@ -322,7 +348,7 @@ def v2_localization(state):
     for record in state.get("evidence",[]):
         if not isinstance(record,dict): continue
         result=record.get("result") or {}
-        if record.get("trusted_expected") and result.get("matched") is False and result.get("status")=="ok":
+        if record.get("version_id")=="original" and probe_match(record) is False:
             reproduced.append({"evidence_id":record.get("id"),"input":record.get("input",""),
                                "expected":record.get("expected",""),"stdout":result.get("stdout",""),
                                "expected_source":record.get("expected_source")})
@@ -583,6 +609,12 @@ def validate_request(r):
         if not isinstance(r.get(k), str) or not r[k]: raise ValueError(f"{k} must be a non-empty string")
     if r["language"] not in ("cpp17", "cpp20", "python3"): raise ValueError("language must be cpp17, cpp20, or python3")
     if not isinstance(r.get("environment", {}), dict): raise ValueError("environment must be an object")
+    if "output_comparison" in r:
+        comparison=r["output_comparison"]
+        if (not isinstance(comparison,dict) or set(comparison)!={"kind","source"}
+                or comparison.get("kind") not in ("trimmed_text","exact_text","whitespace_tokens","case_insensitive_tokens")
+                or not isinstance(comparison.get("source"),str) or not comparison["source"].strip()):
+            raise ValueError("output_comparison must state a supported kind and its trusted source")
     cases = r.get("known_failing_tests", [])
     if not isinstance(cases, list) or len(cases)>32: raise ValueError("known_failing_tests must be an array of at most 32 cases")
     for i, c in enumerate(cases):
@@ -3163,6 +3195,22 @@ def causal_result_match(result, expected, source_kind=None):
         return stdout.split()==expected.split()
     return stdout.strip()==expected.strip()
 
+def v2_result_match(result, expected, source_kind=None, comparison=None):
+    """Compare under a caller-attested rule, or leave formatting-only differences unresolved."""
+    if comparison is None: return causal_result_match(result,expected,source_kind)
+    if result.get("status")!="ok" or result.get("stdout_truncated"): return False
+    stdout=result.get("stdout",""); kind=comparison.get("kind")
+    if kind=="exact_text": return stdout==expected
+    if kind=="trimmed_text": return stdout.strip()==expected.strip()
+    if kind=="whitespace_tokens": return stdout.split()==expected.split()
+    if kind=="case_insensitive_tokens": return [x.casefold() for x in stdout.split()]==[x.casefold() for x in expected.split()]
+    if kind!="unspecified": raise ValueError("unsupported output comparison")
+    if source_kind=="builtin_oracle:increasing_xor.v1": return stdout.split()==expected.split()
+    if stdout.strip()==expected.strip(): return True
+    if stdout.split()==expected.split(): return None
+    if [x.casefold() for x in stdout.split()]==[x.casefold() for x in expected.split()]: return None
+    return False
+
 def derive_causal_experiment_result(exp, evidence_by_id, require_all_edit_owners=True, scope_version=6):
     target_ids=exp.get("target_hypothesis_ids",[]); supports={hid:[] for hid in target_ids}; group_support=[]; controls=[]; blocked=[]; distinctions=[]; background_risks=[]; variant_risks={hid:[] for hid in target_ids}
     if exp.get("status")!="completed":
@@ -4204,19 +4252,32 @@ def v2_execute_source(req,state,source,version_id,case,run_env,preflight,budget,
     # record; it is never inferred from a model supplied expected field.
     trusted=case.get("trusted") is True or case.get("trusted_expected") is True
     if case.get("source_kind")=="model_probe_untrusted": trusted=False
-    if trusted: result["matched"]=causal_result_match(result,case.get("expected",""),case.get("source_kind"))
+    comparison=state.get("run_configuration",{}).get("output_comparison")
+    if trusted: result["matched"]=v2_result_match(result,case.get("expected",""),case.get("source_kind"),comparison)
     else: result["matched"]=None
     eid=f"T{len(state['evidence'])+1:04d}"
     ev={"id":eid,"version_id":version_id,"source_kind":case.get("source_kind","model_probe_untrusted"),"input":case["input"],
         "input_sha256":sha(case["input"]),"source_sha256":sha(source),"trusted_expected":trusted,
         "result":result,"action_id":action_id,"legal_input_verified":bool(case.get("legal_input_verified",case.get("legal_input") is True)),
         "expected_source":case.get("expected_source"),"legal_input_source":case.get("legal_input_source")}
+    if comparison is not None: ev["output_comparison"]=copy.deepcopy(comparison)
     if trusted:
         ev.update(expected=case["expected"],expected_sha256=sha(case["expected"]))
         for key in ("oracle_version","oracle_implementation_sha256","oracle_contract_sha256","oracle_case_id","oracle_validated","input_statement_quote","expected_statement_quote"):
             if key in case: ev[key]=case[key]
     state["evidence"].append(ev)
     return ev
+
+def v2_attach_action_links(state,record,linked):
+    result=record.get("result") or {}
+    ids=list(result.get("evidence_ids",[]))
+    for observation in result.get("observations",[]):
+        ids.extend([observation.get("original_evidence_id"),observation.get("variant_evidence_id")])
+    for cid in linked:
+        candidate=next(x for x in state["candidates"] if x["id"]==cid)
+        candidate["evidence_links"].append({"action_id":record["id"],"evidence_ids":sorted(set(x for x in ids if x)),
+            "association_kind":"joint_candidates" if len(linked)>1 else "single_candidate",
+            "interpretation":"tool-action association only; not model citation or semantic/independent support"})
 
 def v2_execute_action(req,state,action,aliases,run_env,preflight,budget,build_cache,bash_session=None):
     action_id=f"A{len(state['tool_actions'])+1:04d}"; raw=copy.deepcopy(action["item"]); kind=raw["kind"]
@@ -4293,15 +4354,7 @@ def v2_execute_action(req,state,action,aliases,run_env,preflight,budget,build_ca
         # Known candidate references identify the attempted action even when its
         # execution is rejected. Such a link carries no evidence unless execution
         # actually produced evidence IDs. Unknown/ambiguous refs returned above.
-        result=record.get("result") or {}
-        ids=list(result.get("evidence_ids",[]))
-        for observation in result.get("observations",[]):
-            ids.extend([observation.get("original_evidence_id"),observation.get("variant_evidence_id")])
-        for cid in linked:
-            candidate=next(x for x in state["candidates"] if x["id"]==cid)
-            candidate["evidence_links"].append({"action_id":action_id,"evidence_ids":sorted(set(x for x in ids if x)),
-                "association_kind":"joint_candidates" if len(linked)>1 else "single_candidate",
-                "interpretation":"tool-action association only; not model citation or semantic/independent support"})
+        v2_attach_action_links(state,record,linked)
     return record
 
 def v2_integrity(state):
@@ -4336,6 +4389,10 @@ def verify_v2_case_state(data):
     schema_version=cfg.get("protocol_schema_version")
     if cfg.get("diagnostic_core_version")!=2 or schema_version not in (1,2,3,4,5):
         raise ValueError("unsupported core v2 protocol/schema version")
+    comparison=cfg.get("output_comparison")
+    if "output_comparison" in cfg and comparison!=req.get("output_comparison",{"kind":"unspecified"}):
+        raise ValueError("v2 output comparison does not match the request")
+    response_events=[]
     if schema_version>=5:
         expected=[]
         for item in data.get("model_turns",[]):
@@ -4344,6 +4401,7 @@ def verify_v2_case_state(data):
             turn=item["turn"]
             parsed=v2_validate_response_for_state({"protocol_issues":expected,
                 "protocol_clarifications":data.get("protocol_clarifications",[])},response,turn,schema_version)
+            response_events.append((item,parsed["issues"]))
             expected.extend({"turn":turn,**i} for i in parsed["issues"])
             if data.get("final_review",{}).get("turn")==turn and (response.get("actions")!=[] or response.get("stop") is not True or response.get("next_question")!=""):
                 expected.append({"turn":turn,"part":"final_review","reason":"final review requires actions=[], stop=true, next_question=''"})
@@ -4475,9 +4533,11 @@ def verify_v2_case_state(data):
         response=turn.get("visible_response")
         if isinstance(response,dict) and isinstance(response.get("candidates"),list):
             visible_items.extend((turn.get("turn"),i,item) for i,item in enumerate(response["candidates"]))
-    for turn_no,index,item in visible_items:
-        raw=next((x for x in data.get("raw_candidates",[]) if x.get("turn")==turn_no and x.get("index")==index),None)
-        if not raw or canonical_sha(raw.get("proposal"))!=canonical_sha(item): raise ValueError("v2 C_raw candidate does not match complete visible model response")
+    retained_items=[x for x in data.get("raw_candidates",[]) if x.get("status")!="unparsed_response"]
+    if len(visible_items)!=len(retained_items): raise ValueError("v2 C_raw candidate count does not match visible model responses")
+    for (turn_no,index,item),raw in zip(visible_items,retained_items):
+        if raw.get("turn")!=turn_no or raw.get("index")!=index or canonical_sha(raw.get("proposal"))!=canonical_sha(item):
+            raise ValueError("v2 C_raw candidate does not match complete visible model response")
     aliases={}; alias_turn={}
     for candidate in data.get("candidates",[]):
         ref=candidate.get("proposal_ref")
@@ -4487,6 +4547,8 @@ def verify_v2_case_state(data):
     if aliases!=data.get("candidate_aliases",{}): raise ValueError("v2 proposal alias map does not recompute")
     if schema_version>=3:
         for action in data.get("tool_actions",[]):
+            if "replay_status" in action and (not data.get("replay_source") or action.get("replay_status")!="not_reexecuted" or action.get("status")=="accepted"):
+                raise ValueError("v2 retained replay action has invalid provenance")
             proposal=action.get("proposal",{}); refs=proposal.get("candidate_refs",[]) if isinstance(proposal,dict) else []
             if not isinstance(refs,list): raise ValueError("v2 action candidate refs are malformed")
             # The writer resolves refs against the aliases that existed when the action
@@ -4565,13 +4627,41 @@ def verify_v2_case_state(data):
         if raw.get("status")=="unparsed_response":
             if raw.get("proposal_sha256")!=sha(raw.get("proposal","")): raise ValueError("v2 unparsed response hash mismatch")
         elif raw.get("proposal_sha256")!=canonical_sha(raw.get("proposal")): raise ValueError("v2 raw candidate hash mismatch")
-    for call in data.get("budget",{}).get("calls",[]):
+    replay_source=data.get("replay_source")
+    if replay_source is not None:
+        if (not isinstance(replay_source,dict) or not isinstance(replay_source.get("case_id"),str) or not replay_source["case_id"]
+                or not isinstance(replay_source.get("case_state_payload_sha256"),str)
+                or not re.fullmatch(r"[0-9a-f]{64}",replay_source["case_state_payload_sha256"])
+                or not isinstance(replay_source.get("model_calls"),list) or data.get("budget",{}).get("calls",[])
+                or any(not isinstance(call,dict) for call in replay_source.get("model_calls",[]))):
+            raise ValueError("v2 replay source metadata is invalid")
+    calls=replay_source["model_calls"] if replay_source is not None else data.get("budget",{}).get("calls",[])
+    for call in calls:
         if "raw_content" in call and call.get("visible_response_sha256")!=sha(call["raw_content"]): raise ValueError("v2 raw model response hash mismatch")
     clarifications=data.get("protocol_clarifications",[]) if schema_version>=2 else []
     if schema_version>=2 and len(clarifications)>V2_PROTOCOL["limits"]["parse_clarifications_per_case"]: raise ValueError("v2 protocol clarification limit exceeded")
-    calls=data.get("budget",{}).get("calls",[])
+    response_by_call={}
+    if any(item.get("kind")=="schema" for item in clarifications):
+        successful=[(i,c) for i,c in enumerate(calls) if c.get("phase") in ("EXPLORE_V2","EXPLORE_V2_CLARIFY") and c.get("status")=="ok"]
+        if len(successful)!=len(response_events): raise ValueError("v2 schema clarification responses do not match model calls")
+        for (index,call),(event,issues) in zip(successful,response_events):
+            if "raw_content" in call:
+                try:
+                    decode=v2_decode_tool_arguments if str(call.get("transport","")).startswith("native_") else parse_model_json
+                    original,_=decode(call["raw_content"])
+                except (ValueError,TypeError) as exc:
+                    raise ValueError("v2 accepted model response cannot be decoded") from exc
+                if canonical_sha(original)!=event.get("model_response_sha256"):
+                    raise ValueError("v2 model response does not match its retained call")
+            response_by_call[index]=(event,issues)
     for item in clarifications:
         failed_index=item.get("failed_call_index"); clarify_index=item.get("clarification_call_index")
+        if item.get("kind")=="schema" and clarify_index is None and isinstance(failed_index,int):
+            # Older writers omitted the index only when the immediately following
+            # clarification failed before it could be linked to its request.
+            possible=failed_index+1
+            if 0<=possible<len(calls) and calls[possible].get("phase")=="EXPLORE_V2_CLARIFY" and calls[possible].get("status")=="failed" and calls[possible].get("error")==item.get("error"):
+                clarify_index=possible
         if not isinstance(failed_index,int) or not isinstance(clarify_index,int) or not (0<=failed_index<clarify_index<len(calls)):
             raise ValueError("v2 protocol clarification call links are invalid")
         failed,clarify=calls[failed_index],calls[clarify_index]
@@ -4579,12 +4669,22 @@ def verify_v2_case_state(data):
             # A schema clarification repairs a response that parsed but violated the protocol.
             if failed.get("phase")!="EXPLORE_V2" or failed.get("status")!="ok":
                 raise ValueError("v2 schema clarification is not linked to an accepted response")
+            event,issues=response_by_call.get(failed_index,({},None))
+            if event.get("turn")!=item.get("turn") or not issues or item.get("issues")!=issues:
+                raise ValueError("v2 schema clarification issues do not match the response")
         elif failed.get("phase")!="EXPLORE_V2" or failed.get("status")!="failed" or failed.get("error")!="JSONDecodeError" or "raw_content" not in failed:
             raise ValueError("v2 protocol clarification is not linked to an unparsable visible response")
-        if clarify.get("phase")!="EXPLORE_V2_CLARIFY" or clarify.get("clarification_of_call_index")!=failed_index:
+        legacy_failed_link=(item.get("kind")=="schema" and clarify_index==failed_index+1 and clarify.get("status")=="failed"
+                            and clarify.get("clarification_of_call_index") is None and clarify.get("error")==item.get("error"))
+        if clarify.get("phase")!="EXPLORE_V2_CLARIFY" or (clarify.get("clarification_of_call_index")!=failed_index and not legacy_failed_link):
             raise ValueError("v2 clarification request is not linked to its failed call")
         expected_clarification_status="recovered" if clarify.get("status")=="ok" else "admission_rejected" if clarify.get("status")=="rejected" else "failed"
-        if item.get("failed_response_sha256")!=failed.get("visible_response_sha256") or item.get("status")!=expected_clarification_status:
+        if item.get("kind")=="schema" and clarify.get("status")=="ok":
+            event,issues=response_by_call.get(clarify_index,({},None))
+            if event.get("turn")!=item.get("turn") or issues is None: raise ValueError("v2 schema clarification has no retained response")
+            expected_clarification_status="failed" if issues or item.get("error") else "recovered"
+        missing_legacy_hash=(item.get("kind")=="schema" and "failed_response_sha256" not in item and isinstance(failed.get("raw_content"),str))
+        if (not missing_legacy_hash and item.get("failed_response_sha256")!=failed.get("visible_response_sha256")) or item.get("status")!=expected_clarification_status:
             raise ValueError("v2 clarification record does not match its calls")
     versions=data.get("versions",{}); original=versions.get("original")
     if not isinstance(original,dict) or original.get("source")!=req["source"] or original.get("source_sha256")!=sha(req["source"]): raise ValueError("v2 original source version is invalid")
@@ -4626,9 +4726,11 @@ def verify_v2_case_state(data):
             else: justified=False
             if not justified: raise ValueError("v2 execution evidence is not linked to its action proposal")
         result=ev.get("result",{})
+        if ("output_comparison" in cfg and ev.get("output_comparison")!=comparison) or ("output_comparison" not in cfg and "output_comparison" in ev):
+            raise ValueError("v2 evidence output comparison does not match the run")
         for key in ("stdout","stderr"):
             if key in result and result.get(key+"_sha256")!=sha(result[key]): raise ValueError("v2 execution output hash mismatch")
-        expected_match=causal_result_match(result,ev.get("expected",""),ev.get("source_kind")) if ev.get("trusted_expected") else None
+        expected_match=v2_result_match(result,ev.get("expected",""),ev.get("source_kind"),comparison) if ev.get("trusted_expected") else None
         if result.get("matched")!=expected_match: raise ValueError("v2 matched flag does not recompute from expected provenance")
         if ev.get("trusted_expected"):
             source_kind=ev.get("source_kind")
@@ -4647,13 +4749,14 @@ def verify_v2_case_state(data):
     original_trusted=[e for e in evidence if e.get("version_id")=="original" and e.get("trusted_expected")]
     original_failures=[e for e in evidence if e.get("version_id")=="original" and e.get("result",{}).get("status")!="ok"]
     mismatches=sum(1 for e in original_trusted if e.get("result",{}).get("status")=="ok" and e.get("result",{}).get("matched") is False)
+    comparison_pending=any(e.get("result",{}).get("status")=="ok" and e.get("result",{}).get("matched") is None for e in original_trusted)
     if counts.get("available")!=expected_available or counts.get("executed")!=len(original_trusted) or counts.get("mismatches")!=mismatches: raise ValueError("v2 trusted test counts do not recompute")
-    expected_status="execution_blocked" if original_failures else "mismatch_observed" if mismatches else "no_failure_observed" if original_trusted and len(original_trusted)==expected_available else "insufficient"
+    expected_status="execution_blocked" if original_failures else "mismatch_observed" if mismatches else "comparison_unresolved" if comparison_pending else "no_failure_observed" if original_trusted and len(original_trusted)==expected_available else "insufficient"
     if data.get("coverage",{}).get("trusted_test_status")!=expected_status: raise ValueError("v2 trusted test status does not recompute")
     expected_open=[x["id"] for x in data.get("candidates",[]) if x.get("lifecycle") not in ("withdrawn","merged")]
     expected_unresolved=[x["id"] for x in data.get("candidates",[]) if x.get("lifecycle") not in ("withdrawn","merged") and x.get("candidate_kind") in ("defect_candidate","unclassified")]
     if data.get("coverage",{}).get("open_candidate_ids")!=expected_open or data.get("coverage",{}).get("unresolved_candidate_ids")!=expected_unresolved: raise ValueError("v2 open candidate coverage does not recompute")
-    finite_status="execution_blocked" if original_failures else "finite_mismatch_observed" if mismatches else "finite_tests_passed" if original_trusted else "no_trusted_evidence"
+    finite_status="execution_blocked" if original_failures else "finite_mismatch_observed" if mismatches else "comparison_unresolved" if comparison_pending else "finite_tests_passed" if original_trusted else "no_trusted_evidence"
     for candidate in data.get("candidates",[]):
         kind=candidate.get("candidate_kind"); summary=candidate.get("validation_summary",{})
         if kind=="correctness_coverage" and summary!={"status":finite_status,"basis":"all executed original trusted tests; finite observation only, not a correctness proof"}: raise ValueError("v2 coverage candidate status does not recompute")
@@ -4774,6 +4877,11 @@ def v2_prompt(req,state,turn,independent_review=False):
                 controller_notes=controller_notes+[f"The last run_bash command hit the {cap:g}s cap and printed nothing, so everything it computed was lost. Print each mismatch and periodic progress as they are found, stop at the first mismatch, and size the batch so it finishes well inside the cap."]
             else:
                 controller_notes=controller_notes+[f"The last run_bash command hit the {cap:g}s cap; only what it printed before the cut survived. Print incrementally and shrink the batch."]
+    rejected_actions=v2_unresolved_rejections(state)
+    if rejected_actions:
+        controller_notes=controller_notes+["Rejected tool actions never executed and carry no evidence: "+
+            "; ".join(f"{x.get('id')} ({x.get('kind')}): {x.get('blocked_reason')}" for x in rejected_actions[-4:])+
+            ". Re-submit one corrected action of the same kind when a claim depends on it, or say in next_question that the probe stays unsupported. A rejected action can never be cited as evidence."]
     action_history=[]
     for action in state["tool_actions"]:
         kind=action["kind"]; result=action.get("result") or {}; proposal=copy.deepcopy(action.get("proposal"))
@@ -4912,6 +5020,31 @@ def v2_final_review_prompt(req,state,turn):
     return json.dumps(prompt,ensure_ascii=False,separators=(",",":"))
 
 
+def v2_action_repair_prompt(req,state,turn,rejected):
+    # One bounded second chance for proposals the controller rejected. It is a normal
+    # exploration turn — the same schema, the same ledger — with the rejection reasons
+    # restated, so a claim is either re-probed correctly or explicitly left unsupported.
+    prompt=json.loads(expand_v2_prompt(v2_prompt(req,state,turn),state))
+    prompt["controller_mode"]="action_repair"
+    details=[]
+    for record in rejected:
+        proposal=record.get("proposal") or {}
+        item={"action_id":record.get("id"),"kind":record.get("kind"),"controller_reason":record.get("blocked_reason"),
+              "proposal_ref":record.get("proposal_ref")}
+        if record.get("kind")=="run_variant" and isinstance(proposal.get("edits"),list):
+            item["declared_edits"]=[{"start_line":edit.get("start_line"),"end_line":edit.get("end_line")}
+                                    for edit in proposal["edits"] if isinstance(edit,dict)]
+            item["input_refs"]=proposal.get("input_refs",[])
+        details.append(item)
+    prompt["controller_notes"].append(
+        "Action-repair turn. The controller rejected these proposals, so none of them executed: "+json.dumps(details,ensure_ascii=False)+
+        ". Re-submit each still-relevant action once with a valid replacement, or leave it out and name the unsupported claim in next_question. "
+        "For run_variant, start_line and end_line must be exactly the lines old_text occupies in the named parent version, parent_version_id must name an existing version, and every input_refs entry must be an already executed original-program evidence ID. "
+        "A rejected action is not evidence: do not cite it, do not describe it as executed, and do not add claims that no executed action supports. "
+        "Return the normal response object; stop=true is allowed only when no repair is needed.")
+    return json.dumps(prompt,ensure_ascii=False,separators=(",",":"))
+
+
 def diagnose_v2(req,provider="model",checkpoint_path=None,replay_state=None,strategy="causal"):
     if strategy not in ("causal","one_shot"): raise ValueError("strategy must be causal or one_shot")
     validate_request(req); cfg=model_budget_configuration(); profile=selected_prompt_profile(); started=time.monotonic()
@@ -4941,8 +5074,12 @@ def diagnose_v2(req,provider="model",checkpoint_path=None,replay_state=None,stra
          "invariants":[],"candidates":[],"raw_candidates":[],"candidate_aliases":{},"candidate_sets":{"C_raw":[],"C_store":[],"C_deliver":[]},"candidate_decisions":[],"candidate_update_decisions":[],"candidate_intake_failures":[],
         "model_turns":[],"tool_actions":[],"tool_action_decisions":[],"protocol_issues":[],"protocol_clarifications":[],"analysis_errors":[],"roots":[],"coverage":{"trusted_test_count":{"available":len(plan),"executed":0,"mismatches":0},"execution_cells_used":0,"execution_cell_cap":V2_PROTOCOL["limits"]["execution_cells"],"resource_status":"unverified","unresolved_candidate_ids":[]},
         "budget":{"calls":[],"config":cfg,"report_reserve_tokens":REPORT_TOKEN_RESERVE,"confirmed_usage_tokens":0,"reserved_unknown_tokens":0,"tokens_total":0,"usage_complete":True,"hard_limit_tokens":cfg["token_limit"],"soft_target_tokens":cfg["soft_token_target"],"soft_target_overage_tokens":0,"wall_seconds":0,"tool_wall_seconds":preflight.get("wall_seconds",0)},"integrity":{}}
+    legacy_comparison=(provider=="replay" and isinstance(replay_state,dict) and "output_comparison" not in replay_state.get("run_configuration",{}))
+    if not legacy_comparison:
+        state["run_configuration"]["output_comparison"]=copy.deepcopy(req.get("output_comparison",{"kind":"unspecified"}))
     budget=Budget(started,on_update=lambda calls: (state["budget"].update({"calls":calls,**budget.accounting_summary()}),v2_checkpoint(state,checkpoint_path)),max_tokens=cfg["token_limit"],max_wall_seconds=cfg["max_wall_seconds"])
     if protocol_schema>=4: state["final_review"]={"status":"not_needed","turn":None}
+    state["action_repair"]=None
     model=OpenAICompatible(state); run_env=dict(req.get("environment",{})); run_env["_root_scout_image_id"]=preflight.get("image_id") or ""
     build_cache=BuildCache() if preflight.get("available") and req["language"].startswith("cpp") else None
     bash_session=BashSession(lifetime_seconds=budget.remaining_wall()+5) if protocol_schema>=4 and preflight.get("available") else None
@@ -4989,17 +5126,41 @@ def diagnose_v2(req,provider="model",checkpoint_path=None,replay_state=None,stra
                     stop_reason="replay_without_saved_actions"; break
                 old=verify_v2_case_state(replay_state)
                 if canonical_sha(old["request_snapshot"])!=canonical_sha(req): raise ValueError("v2 replay request does not match saved CaseState")
+                replay_baseline=copy.deepcopy(state)
                 state["candidates"]=copy.deepcopy(old["candidates"]); state["raw_candidates"]=copy.deepcopy(old["raw_candidates"])
                 state["candidate_sets"]=copy.deepcopy(old["candidate_sets"]); state["candidate_aliases"]=copy.deepcopy(old["candidate_aliases"]); state["candidate_decisions"]=copy.deepcopy(old["candidate_decisions"])
                 state["candidate_update_decisions"]=copy.deepcopy(old["candidate_update_decisions"]); state["model_turns"]=copy.deepcopy(old["model_turns"])
                 state["invariants"]=copy.deepcopy(old.get("invariants",[]))
                 state["tool_action_decisions"]=copy.deepcopy(old.get("tool_action_decisions",[])); state["protocol_issues"]=copy.deepcopy(old.get("protocol_issues",[])); state["candidate_intake_failures"]=copy.deepcopy(old.get("candidate_intake_failures",[]))
+                state["protocol_clarifications"]=copy.deepcopy(old.get("protocol_clarifications",[]))
+                if "response_repairs" in old: state["response_repairs"]=copy.deepcopy(old["response_repairs"])
+                state["replay_source"]={"case_id":old["id"],"case_state_payload_sha256":old["integrity"]["payload_sha256"],
+                    "model_calls":copy.deepcopy((old.get("replay_source") or {}).get("model_calls",old.get("budget",{}).get("calls",[])))}
                 # Associations describe this execution, not the saved execution.
                 for candidate in state["candidates"]: candidate["evidence_links"]=[]
                 aliases=copy.deepcopy(state["candidate_aliases"])
-                for old_action in old.get("tool_actions",[]):
-                    if old_action.get("status")!="accepted": continue
-                    v2_execute_action(req,state,{"item":old_action["proposal"],"turn":old_action.get("turn",1)},aliases,run_env,preflight,budget,build_cache,bash_session=bash_session)
+                try:
+                    for old_action in old.get("tool_actions",[]):
+                        if old_action.get("id")!=f"A{len(state['tool_actions'])+1:04d}":
+                            raise ValueError("v2 replay action sequence is not contiguous")
+                        expected_ids=[e["id"] for e in old.get("evidence",[]) if e.get("action_id")==old_action["id"]]
+                        if old_action.get("status")!="accepted" and not expected_ids:
+                            retained=copy.deepcopy(old_action); retained["replay_status"]="not_reexecuted"
+                            state["tool_actions"].append(retained)
+                            for vid,version in old.get("versions",{}).items():
+                                if version.get("action_id")==old_action["id"]: state["versions"][vid]=copy.deepcopy(version)
+                            if retained.get("blocked_reason")!="candidate_refs contains an unknown or ambiguous proposal ref":
+                                linked=list(dict.fromkeys(x.get("candidate_id") for x in retained.get("candidate_links",[]) if x.get("candidate_id")))
+                                v2_attach_action_links(state,retained,linked)
+                            continue
+                        before=len(state["evidence"])
+                        replayed=v2_execute_action(req,state,{"item":old_action["proposal"],"turn":old_action.get("turn",1)},aliases,run_env,preflight,budget,build_cache,bash_session=bash_session)
+                        if [e["id"] for e in state["evidence"][before:]]!=expected_ids:
+                            raise ValueError("v2 replay evidence sequence changed")
+                        if old_action.get("status")!="accepted": replayed["replayed_from_status"]=old_action.get("status")
+                except Exception:
+                    state.clear(); state.update(replay_baseline)
+                    raise
                 if protocol_schema>=4: state["final_review"]=copy.deepcopy(old["final_review"])
                 stop_reason="replay_completed"; break
             if provider!="model": raise ValueError("provider must be model or replay")
@@ -5063,8 +5224,10 @@ def diagnose_v2(req,provider="model",checkpoint_path=None,replay_state=None,stra
                             and len(state["protocol_clarifications"])<V2_PROTOCOL["limits"]["parse_clarifications_per_case"]):
                         # One budgeted schema repair. The rejected issues stay in the ledger; the
                         # clarified response must acknowledge them explicitly to resolve the turn.
+                        failed_index=len(state["budget"].get("calls",[]))-1
+                        failed_call=state["budget"]["calls"][failed_index]
                         record={"turn":turn,"kind":"schema","status":"started","issues":parsed["issues"],
-                                "failed_call_index":len(state["budget"].get("calls",[]))-1}
+                                "failed_call_index":failed_index,"failed_response_sha256":failed_call.get("visible_response_sha256")}
                         state["protocol_clarifications"].append(record)
                         try:
                             repaired=ask_v2("EXPLORE_V2_CLARIFY",v2_schema_clarification_prompt(prompt,response,parsed["issues"],turn),turn)
@@ -5073,8 +5236,16 @@ def diagnose_v2(req,provider="model",checkpoint_path=None,replay_state=None,stra
                             parsed=accept_response(repaired,turn)
                             record["status"]="recovered" if not parsed["issues"] else "failed"
                         except Exception as exc:
-                            record["status"]="failed"
+                            calls=state["budget"].get("calls",[])
+                            if len(calls)<=failed_index+1:
+                                budget.add({"phase":"EXPLORE_V2_CLARIFY","status":"skipped","error":type(exc).__name__,"usage_complete":True})
+                            record["clarification_call_index"]=len(calls)-1
+                            clarify_call=calls[record["clarification_call_index"]]
+                            clarify_call["clarification_of_call_index"]=failed_index
+                            record["status"]="admission_rejected" if clarify_call.get("status")=="rejected" else "failed"
                             record["error"]=type(exc).__name__
+                            if clarify_call.get("status")=="failed" and clarify_call.get("raw_content"):
+                                v2_preserve_failed_response(state,turn,exc,record["clarification_call_index"])
                     if reasoning_policy_applied and turn==2:
                         reasoning_routing["low_review_status"]="failed" if any(x.get("turn")==2 for x in state["protocol_issues"]) else "completed"
                     if reasoning_policy_applied and turn==1:
@@ -5093,9 +5264,34 @@ def diagnose_v2(req,provider="model",checkpoint_path=None,replay_state=None,stra
         last_turn=max(completed_turns,default=0)
         pending_results=bool(last_turn and any(a.get("turn")==last_turn for a in state["tool_actions"]))
         if protocol_schema>=5 and not reasoning_policy_applied and v2_incomplete_protocol(state): pending_results=True
-        if protocol_schema>=4 and provider=="model" and strategy=="causal" and pending_results and state["analysis_errors"]:
+        # A rejected action is the one model-side error the controller can still repair:
+        # spend one bounded extra call to have it re-proposed, rather than leaving the
+        # whole case incomplete because one proposal was malformed. The rejection stays in
+        # the ledger either way; only an accepted replacement stops it blocking the verdict.
+        rejected_actions=v2_unresolved_rejections(state)
+        repair_turn=None
+        if (protocol_schema>=4 and provider=="model" and strategy=="causal" and rejected_actions
+                and not state["analysis_errors"]):
+            repair_turn=last_turn+1
+            state["action_repair"]={"status":"started","turn":repair_turn,
+                                    "rejected_action_ids":[x["id"] for x in rejected_actions]}
+            try:
+                if budget.remaining_wall()<=1: raise BudgetExhausted("wall budget exhausted before action repair")
+                response=ask_v2("EXPLORE_V2",v2_action_repair_prompt(req,state,repair_turn,rejected_actions),repair_turn)
+                accept_response(response,repair_turn)
+                v2_mark_repaired_actions(state)
+                left=v2_unresolved_rejections(state)
+                state["action_repair"].update({"status":"repaired" if not left else "unrepaired",
+                    "repaired_action_ids":[x["id"] for x in rejected_actions if x.get("repair_status")=="repaired"],
+                    "unresolved_action_ids":[x["id"] for x in left]})
+            except Exception as exc:
+                state["action_repair"].update({"status":"skipped_budget" if isinstance(exc,BudgetExhausted) else "failed",
+                                               "error":type(exc).__name__})
+                repair_turn=None
+            v2_checkpoint(state,checkpoint_path)
+        if repair_turn is None and protocol_schema>=4 and provider=="model" and strategy=="causal" and pending_results and state["analysis_errors"]:
             state["final_review"]={"status":"not_available","turn":None,"reason":"analysis ended with an earlier model error"}
-        if protocol_schema>=4 and provider=="model" and strategy=="causal" and pending_results and not state["analysis_errors"]:
+        if repair_turn is None and protocol_schema>=4 and provider=="model" and strategy=="causal" and pending_results and not state["analysis_errors"]:
             review_turn=last_turn+1
             state["final_review"]={"status":"started","turn":review_turn}
             try:
@@ -5131,10 +5327,12 @@ def diagnose_v2(req,provider="model",checkpoint_path=None,replay_state=None,stra
     state["coverage"]["trusted_test_count"]["executed"]=sum(1 for e in state["evidence"] if e["version_id"]=="original" and e.get("trusted_expected"))
     state["coverage"]["trusted_test_count"]["mismatches"]=sum(1 for e in state["evidence"] if e["version_id"]=="original" and e.get("trusted_expected") and e.get("result",{}).get("status")=="ok" and e.get("result",{}).get("matched") is False)
     state["coverage"]["execution_failures"]=[{"evidence_id":e["id"],"profile":"formal","status":e["result"].get("status"),"version_id":"original"} for e in state["evidence"] if e["version_id"]=="original" and e["result"].get("status")!="ok"]
-    state["coverage"]["trusted_test_status"]=("execution_blocked" if state["coverage"].get("execution_failures") else "mismatch_observed" if state["coverage"]["trusted_test_count"]["mismatches"] else "no_failure_observed" if state["coverage"]["trusted_test_count"]["executed"] and state["coverage"]["trusted_test_count"]["executed"]==state["coverage"]["trusted_test_count"]["available"] else "insufficient")
+    comparison_pending=any(e.get("version_id")=="original" and e.get("trusted_expected") and e.get("result",{}).get("status")=="ok"
+                           and e["result"].get("matched") is None for e in state["evidence"])
+    state["coverage"]["trusted_test_status"]=("execution_blocked" if state["coverage"].get("execution_failures") else "mismatch_observed" if state["coverage"]["trusted_test_count"]["mismatches"] else "comparison_unresolved" if comparison_pending else "no_failure_observed" if state["coverage"]["trusted_test_count"]["executed"] and state["coverage"]["trusted_test_count"]["executed"]==state["coverage"]["trusted_test_count"]["available"] else "insufficient")
     state["coverage"]["open_candidate_ids"]=[x["id"] for x in state["candidates"] if x["lifecycle"] not in ("withdrawn","merged")]
     state["coverage"]["unresolved_candidate_ids"]=[x["id"] for x in state["candidates"] if x["lifecycle"] not in ("withdrawn","merged") and x["candidate_kind"] in ("defect_candidate","unclassified")]
-    finite_status=("execution_blocked" if state["coverage"].get("execution_failures") else "finite_mismatch_observed" if state["coverage"]["trusted_test_count"]["mismatches"] else "finite_tests_passed" if state["coverage"]["trusted_test_count"]["executed"] else "no_trusted_evidence")
+    finite_status=("execution_blocked" if state["coverage"].get("execution_failures") else "finite_mismatch_observed" if state["coverage"]["trusted_test_count"]["mismatches"] else "comparison_unresolved" if comparison_pending else "finite_tests_passed" if state["coverage"]["trusted_test_count"]["executed"] else "no_trusted_evidence")
     for candidate in state["candidates"]:
         if candidate["candidate_kind"]=="correctness_coverage": candidate["validation_summary"]={"status":finite_status,"basis":"all executed original trusted tests; finite observation only, not a correctness proof"}
         elif candidate["candidate_kind"]=="resource_concern": candidate["validation_summary"]={"status":"unverified","basis":"resource/performance measurements are outside this run"}
@@ -5145,12 +5343,11 @@ def diagnose_v2(req,provider="model",checkpoint_path=None,replay_state=None,stra
         # A caller-trusted mismatch is a fact about the submission, so it is reported as
         # reproduced rather than unresolved. A protocol failure still wins the label, but the
         # mismatch itself stays visible in coverage and in the localisation evidence grade.
-        reproduced=any(e.get("trusted_expected") and (e.get("result") or {}).get("matched") is False
-                       and (e.get("result") or {}).get("status")=="ok" for e in state["evidence"])
-        if state["analysis_errors"] or incomplete_protocol or any(x.get("status")=="rejected" for x in state["tool_actions"]): stop_reason="model_protocol_incomplete"
+        reproduced=any(e.get("version_id")=="original" and probe_match(e) is False for e in state["evidence"])
+        if state["analysis_errors"] or incomplete_protocol or v2_unresolved_rejections(state): stop_reason="model_protocol_incomplete"
         elif reasoning_policy_applied and reasoning_routing.get("low_review_status")!="completed": stop_reason="model_protocol_incomplete"
         elif reproduced: stop_reason="defect_reproduced"
-        elif any(e["result"].get("status")!="ok" for e in state["evidence"]) or any(e.get("trusted_expected") and e["result"].get("matched") is False for e in state["evidence"]) or state["coverage"]["unresolved_candidate_ids"] or tc["available"]==0 or tc["executed"]<tc["available"]:
+        elif comparison_pending or any(e["result"].get("status")!="ok" for e in state["evidence"]) or any(e.get("trusted_expected") and e["result"].get("matched") is False for e in state["evidence"]) or state["coverage"]["unresolved_candidate_ids"] or tc["available"]==0 or tc["executed"]<tc["available"]:
             stop_reason="oracle_unresolved"
     state["localization"]=v2_localization(state)
     state["stop_reason"]=stop_reason
@@ -5258,6 +5455,9 @@ def v2_delivery_evidence(state,candidate):
         record={"id":aid,"kind":"bash_observation","association":"model_citation" if aid in citations else associations[aid],
                 "status":result.get("status"),"exit_code":result.get("exit_code"),"trusted_expected":False,
                 "interpretation":"Executed model-written script; its claimed expected values and oracle remain untrusted."}
+        if action.get("replay_status")=="not_reexecuted":
+            record["interpretation"]="Observation retained from the original run; this action was not re-executed."
+            record["replay_status"]="not_reexecuted"
         for key,limit in (("stdout",2000),("stderr",500)):
             clipped(record,key,result.get(key),limit)
             if result.get(key+"_truncated"): record[key+"_truncated"]=True
@@ -5347,7 +5547,8 @@ def probe_match(evidence):
         or not isinstance(result.get("stdout"),str) or result.get("status")!="ok"
         or result.get("stdout_truncated") or type(result.get("returncode")) is not int or result.get("returncode")!=0):
         return None
-    return causal_result_match(result,evidence["expected"],evidence.get("source_kind"))
+    return v2_result_match(result,evidence["expected"],evidence.get("source_kind"),
+                           evidence.get("output_comparison",{"kind":"unspecified"}))
 
 
 def probe_source_anchors(source, locations):
@@ -5406,6 +5607,7 @@ def probe_result(state):
         result=evidence["result"]
         fact={"id":evidence["id"],"input_sha256":sha(evidence["input"]),"source_sha256":evidence.get("source_sha256"),
               "expected_source":evidence["expected_source"],"legal_input_source":evidence["legal_input_source"],
+              "output_comparison":copy.deepcopy(evidence.get("output_comparison",{"kind":"unspecified"})),
               "trust_basis":evidence.get("source_kind"),"status":result["status"],"matched":False,
               "minimality":"not_established","reproducer_complete":True}
         for key,value in (("input",evidence["input"]),("expected",evidence["expected"]),("actual",result.get("stdout",""))):
@@ -5439,7 +5641,8 @@ def probe_result(state):
     runtime=state.get("run_configuration",{}).get("runtime",{})
     stop=state.get("stop_reason","unknown")
     blocked=[e["id"] for e in state.get("evidence",[]) if e.get("result",{}).get("status")!="ok"]
-    blocked_actions=[a["id"] for a in state.get("tool_actions",[]) if a.get("status") in ("blocked","rejected")]
+    blocked_actions=[a["id"] for a in state.get("tool_actions",[]) if a.get("status")=="blocked" or v2_action_rejection_is_unresolved(state,a)]
+    repaired_actions=[a["id"] for a in state.get("tool_actions",[]) if a.get("status")=="rejected" and not v2_action_rejection_is_unresolved(state,a)]
     protocol=v2_protocol_state(state)["status"]
     planned={(c["input"],c.get("expected")) for c in state.get("test_plan",[])+state.get("dynamic_test_plan",[])}
     completed={(e["input"],e.get("expected")) for e in original if probe_match(e) is not None}
@@ -5447,8 +5650,13 @@ def probe_result(state):
     if runtime.get("available") is False or stop=="environment_blocked": gaps.append("sandbox_unavailable")
     if blocked: gaps.append("program_execution_blocked")
     if blocked_actions: gaps.append("tool_actions_not_completed")
+    if repaired_actions: gaps.append("rejected_actions_replaced")
     if not completed: gaps.append("no_completed_trusted_comparison")
     if planned-completed: gaps.append("trusted_cases_not_completed")
+    if any(e.get("trusted_expected") is True and isinstance(e.get("expected"),str)
+           and isinstance((e.get("result") or {}).get("stdout"),str)
+           and v2_result_match(e.get("result",{}),e["expected"],e.get("source_kind"),e.get("output_comparison",{"kind":"unspecified"})) is None
+           for e in original): gaps.append("output_comparison_unspecified")
     if state.get("oracle_error") not in (None,"not_configured"): gaps.append("oracle_contract_rejected")
     if unverified or findings: gaps.append("candidate_semantics_unverified")
     if any(not f["source_anchors"] for f in findings): gaps.append("source_location_unresolved")
@@ -5479,6 +5687,114 @@ def v2_result(state):
             "findings":_v2_candidate_result(state)["findings"]}
 
 
+def markdown_probe(state, probe, candidates):
+    """Render facts and model claims without promoting a claim to verified cause."""
+    def block(value):
+        text=value if isinstance(value,str) else str(value)
+        fence="```"
+        while fence in text: fence+="`"
+        return f"{fence}text\n{text}{'' if text.endswith(chr(10)) else chr(10)}{fence}"
+    def quote(value,limit=1200):
+        text=str(value or "").strip()
+        if len(text)>limit: text=text[:limit]+"…（完整内容见 case_state.json）"
+        return "\n".join("> "+line for line in text.splitlines())
+    labels={"counterexample_found":"已复现输出不符","no_failure_observed":"有限可信测试未发现输出不符",
+            "inconclusive":"尚未确认","environment_blocked":"沙箱不可用","error":"诊断执行失败"}
+    lines=["# RootScout 定位报告","",f"**结果：{labels.get(probe.get('status'),'尚未确认')}**",""]
+    examples=probe.get("counterexamples",[])
+    if examples:
+        case=examples[0]
+        lines.extend([f"## 受信反例 `{case.get('id','')}`",""])
+        if not case.get("reproducer_complete"):
+            lines.extend(["**以下内容已截断，不能直接用于复现；完整记录见 case_state.json。**",""])
+        for key,title in (("input","输入"),("actual","程序输出"),("expected","可信预期")):
+            lines.extend([f"**{title}**",block(case.get(key,"")),""])
+        lines.extend([f"预期来源：{case.get('expected_source') or '未记录'}；输入合法性来源：{case.get('legal_input_source') or '未记录'}。",""])
+        if case.get("minimality")=="not_established": lines.extend(["反例最小性尚未验证。",""])
+        comparison=case.get("output_comparison") or {"kind":"unspecified"}
+        comparison_names={"unspecified":"默认忽略整体首尾空白，内部空白或大小写差异保持未决","trimmed_text":"去除首尾空白后按文本比较",
+                          "exact_text":"按原始文本比较","whitespace_tokens":"按空白分隔的词比较","case_insensitive_tokens":"按词比较且忽略大小写"}
+        lines.extend([f"输出比较：{comparison_names.get(comparison.get('kind'),'未确认')}"
+                      +(f"（来源：{comparison['source']}）" if comparison.get("source") else "")+"。",""])
+        total=probe.get("summary",{}).get("counterexamples",len(examples))
+        if total>1: lines.extend([f"另有 {total-1} 条受信反例，详见 probe.json 和 case_state.json。",""])
+    elif probe.get("status")=="no_failure_observed":
+        lines.extend(["已完成的有限可信测试未观察到失败，不能据此证明程序在所有输入上正确。",""])
+    else:
+        lines.extend(["本次没有可交付的受信反例；未确认不代表程序正确。",""])
+    if "output_comparison_unspecified" in probe.get("scope",{}).get("gaps",[]):
+        pending=next((e for e in state.get("evidence",[]) if e.get("version_id")=="original"
+            and e.get("trusted_expected") is True and e.get("legal_input_verified") is True
+            and e.get("expected_source") and e.get("legal_input_source") and isinstance(e.get("expected"),str)
+            and isinstance((e.get("result") or {}).get("stdout"),str) and (e.get("result") or {}).get("returncode")==0
+            and v2_result_match(e["result"],e["expected"],e.get("source_kind"),e.get("output_comparison",{"kind":"unspecified"})) is None),None)
+        if pending:
+            lines.extend([f"## 待确认的输出比较 `{pending.get('id','')}`","",
+                          "以下仅有空白或大小写差异，尚不能判断评测器是否接受；完整内容见 case_state.json。",""])
+            for value,title in ((pending["result"]["stdout"],"程序输出"),(pending["expected"],"可信预期")):
+                preview=json.dumps(value[:800],ensure_ascii=False)+( " …（已截断）" if len(value)>800 else "")
+                lines.extend([f"**{title}（转义显示）**",block(preview),""])
+    linked={f.get("status",{}).get("id"):f for f in probe.get("findings",[])}
+    findings=[f for f in candidates.get("findings",[]) if f.get("status",{}).get("lifecycle") not in ("withdrawn","merged")
+              and f.get("status",{}).get("kind") in ("defect_candidate","unclassified","unknown")]
+    findings.sort(key=lambda f:f.get("status",{}).get("id") not in linked)
+    source=(state.get("request_snapshot") or {}).get("source","")
+    source=source if isinstance(source,str) else ""
+    source_lines=source.splitlines()
+    if findings:
+        lines.extend(["## 待验证的定位线索","","以下位置、原因和触发条件是模型主张；源码锚定或关联反例均不自动证明因果。",""])
+        for finding in findings[:3]:
+            cid=finding.get("status",{}).get("id") or "未知"
+            locations=finding.get("location") if isinstance(finding.get("location"),list) else []
+            anchors=probe_source_anchors(source,locations)
+            spans=[(a["start_line"],a["end_line"]) for a in anchors]
+            if not spans:
+                for fragment in v2_quoted_fragments(locations):
+                    span,count=v2_quote_span(source,fragment)
+                    if span and count==1: spans.append(span)
+            lines.extend([f"### 候选 `{cid}`（模型主张，未验证）",""])
+            if spans:
+                start,end=spans[0]
+                preview="\n".join(f"{n:>4}  {source_lines[n-1]}" for n in range(start,min(end,start+7)+1))
+                if end-start>=8: preview+="\n…（位置范围已截断）"
+                line_range=str(start) if start==end else f"{start}–{end}"
+                lines.extend([f"位置：原始源码第 {line_range} 行（仅核对源码锚点）。",block(preview),""])
+                if v2_site_check({"source_location_claims":locations},source)=="weak_site":
+                    lines.extend(["该位置可能只是输入或括号，尚未形成可用定位。",""])
+            elif locations:
+                lines.extend(["位置（模型描述，未解析到有效行）：",quote("；".join(str(x) for x in locations)),""])
+            else: lines.extend(["位置：尚未指认到有效源码行。",""])
+            lines.extend(["模型描述：",quote(finding.get("description")),""])
+            if finding.get("trigger"):
+                lines.extend(["模型提出的触发条件：",quote(finding["trigger"]),""])
+            confirmed=linked.get(cid)
+            check=(confirmed or {}).get("causal_check",{})
+            if check.get("status")=="isolated_contrast_observed":
+                lines.extend(["对照：一次隔离修改使受信不符消失；自由文本的因果解释仍未验证。",""])
+            else: lines.extend(["对照：尚未建立隔离因果对照。",""])
+            if check.get("regression_observed"): lines.extend(["注意：对照中观察到回归，详见 probe.json。",""])
+        if len(findings)>3: lines.extend([f"另有 {len(findings)-3} 条候选，详见 result.json。",""])
+    gaps=probe.get("scope",{}).get("gaps",[])
+    if gaps:
+        names={"sandbox_unavailable":"Docker 沙箱不可用","program_execution_blocked":"部分程序执行未完成",
+               "tool_actions_not_completed":"部分工具动作未完成",
+               "rejected_actions_replaced":"有工具动作先被拒绝，已用修正后的动作重新执行","no_completed_trusted_comparison":"没有完成可信输出对比",
+               "trusted_cases_not_completed":"部分可信用例尚未完成可信比较","oracle_contract_rejected":"参考输出契约未通过校验",
+               "output_comparison_unspecified":"输出仅有空白或大小写差异，尚未确认评测器的比较规则",
+               "candidate_semantics_unverified":"候选的因果解释尚未验证","source_location_unresolved":"部分候选未锚定源码",
+               "protocol_unresolved":"模型协议问题尚未解决","analysis_error":"分析过程出现错误",
+               "model_protocol_incomplete":"模型响应未完整收尾","budget_exhausted":"诊断预算耗尽",
+               "replay_without_saved_actions":"仅执行了基线，未重放模型动作","oracle_unresolved":"仍有未解决的验证缺口",
+               "feedback_limit_reached":"达到探索轮次上限","replay_environment_mismatch":"重放环境与原记录不同"}
+        shown=list(dict.fromkeys(names[g] for g in gaps if g in names))
+        if shown: lines.extend(["## 未完成或待核验",""]+[f"- {item}" for item in shown]+[""])
+    telemetry=probe.get("telemetry",{})
+    lines.extend(["---",f"模型调用：{telemetry.get('model_calls',0)} 次；已确认用量：{telemetry.get('confirmed_usage_tokens',0)} token；"
+                  f"用量记录完整：{'是' if telemetry.get('usage_complete') else '否'}；耗时：{telemetry.get('wall_seconds',0)} 秒。",
+                  "完整证据和候选分别见 case_state.json、probe.json、result.json。",""])
+    return "\n".join(lines)
+
+
 def write_probe_artifacts(state, directory, report=None):
     """Persist the replayable evidence before returning the compact report."""
     directory=pathlib.Path(directory).resolve(); directory.mkdir(parents=True,exist_ok=True)
@@ -5487,9 +5803,13 @@ def write_probe_artifacts(state, directory, report=None):
         tmp.write_text(json.dumps(value,ensure_ascii=False,indent=2)+"\n",encoding="utf-8"); tmp.replace(path)
         return {"path":str(path),"sha256":hashlib.sha256(path.read_bytes()).hexdigest()}
     state_artifact=write("case_state.json",state)
-    candidate_artifact=write("result.json",v2_result(state))
+    candidates=v2_result(state)
+    candidate_artifact=write("result.json",candidates)
     report=probe_result(state) if report is None else report
-    report["artifacts"]={"case_state":state_artifact,"candidates":candidate_artifact,"probe":{"path":str(directory/"probe.json")}}
+    report_path=directory/"report.md"; report_tmp=report_path.with_suffix(".md.tmp")
+    report_tmp.write_text(markdown_probe(state,report,candidates),encoding="utf-8"); report_tmp.replace(report_path)
+    report_artifact={"path":str(report_path),"sha256":hashlib.sha256(report_path.read_bytes()).hexdigest()}
+    report["artifacts"]={"case_state":state_artifact,"candidates":candidate_artifact,"report":report_artifact,"probe":{"path":str(directory/"probe.json")}}
     write("probe.json",report)
     return report
 
@@ -5638,6 +5958,7 @@ def cmd_diagnose(a):
         report=out/"report.md"; report.write_text(markdown(s),encoding="utf-8"); delivered=report
     if progress.exists(): progress.unlink()
     print(delivered); print("status="+str(s["stop_reason"]))
+    if v2_delivery: print("report="+str(out/"report.md"))
     return 1 if s.get("stop_reason") in {"failed","environment_blocked","budget_exhausted","interrupted","model_protocol_incomplete","replay_without_saved_actions","replay_environment_mismatch","feedback_limit_reached"} else 0
 
 def main():

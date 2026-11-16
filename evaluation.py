@@ -6,6 +6,7 @@ import pathlib
 import statistics
 import sys
 import hashlib
+import re
 
 import oracle_tools
 
@@ -208,13 +209,13 @@ def write_dataset(path=DATASET):
 
 def validate_dataset(rows):
     if not 20<=len(rows)<=40: raise ValueError("evaluation set must contain 20 to 40 frozen samples")
-    seen=set(); categories=set(); languages=set()
+    seen=set(); seen_ids=set(); categories=set(); languages=set()
     for row in rows:
         req=row.get("request",{}); case_id=row.get("case_id")
         key=(req.get("language"),req.get("statement"),req.get("source"))
-        if not case_id or req.get("evaluation_case_id")!=case_id or key in seen:
+        if not isinstance(case_id,str) or not case_id or case_id in seen_ids or req.get("evaluation_case_id")!=case_id or key in seen:
             raise ValueError("evaluation case IDs and (language, statement, source) must be unique and consistent")
-        seen.add(key); categories.add(row.get("category")); languages.add(req.get("language"))
+        seen.add(key); seen_ids.add(case_id); categories.add(row.get("category")); languages.add(req.get("language"))
         if any(k in req for k in ("expected_roots","frozen_roots","annotation_status")):
             raise ValueError("gold annotations must stay outside the model request")
         oracle_contract,tests,error=(None,[],"not_configured")
@@ -249,7 +250,29 @@ def read_raw_jsonl(path):
     return [json.loads(line) for line in pathlib.Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def load_states(paths):
+def export_requests(dataset, directory):
+    """Export only model requests, preserving any differing existing files."""
+    root=pathlib.Path(directory); root.mkdir(parents=True,exist_ok=True)
+    outputs=[]; seen=set()
+    for case in dataset:
+        case_id=case.get("case_id"); request=case.get("request")
+        if (not isinstance(case_id,str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]*",case_id)
+                or pathlib.PureWindowsPath(case_id+".json").is_reserved() or case_id.casefold() in seen):
+            raise ValueError("evaluation case IDs must be unique, safe filenames")
+        if (not isinstance(request,dict) or request.get("evaluation_case_id")!=case_id
+                or any(key in request for key in ("expected_roots","frozen_roots","annotation_status"))):
+            raise ValueError(f"invalid or annotated request for {case_id}")
+        seen.add(case_id.casefold())
+        path=root/(case_id+".json"); content=json.dumps(request,ensure_ascii=False,indent=2)+"\n"
+        if path.exists() and path.read_text(encoding="utf-8")!=content:
+            raise ValueError(f"refusing to overwrite a different request: {path}")
+        outputs.append((path,content))
+    for path,content in outputs:
+        if not path.exists(): path.write_text(content,encoding="utf-8")
+    return [path for path,_ in outputs]
+
+
+def load_states(paths, reject_duplicates=False):
     states={}
     for raw in paths:
         path=pathlib.Path(raw)
@@ -258,7 +281,9 @@ def load_states(paths):
             try: state=json.loads(candidate.read_text(encoding="utf-8"))
             except (OSError,json.JSONDecodeError): continue
             case_id=state.get("request_snapshot",{}).get("evaluation_case_id")
-            if case_id: states[case_id]=state
+            if case_id:
+                if reject_duplicates and case_id in states: raise ValueError(f"duplicate result for {case_id}")
+                states[case_id]=state
     return states
 
 
@@ -445,21 +470,103 @@ def score(dataset, states, reviews=None):
             "cases":results}
 
 
+def score_v2_locations(dataset,states):
+    """Score primary source-line overlap and exact witness association as limited proxies."""
+    import root_scout as core
+    groups={"bug_cases":{"expected":0,"assessed":0,"primary_line_overlap":0,"line_and_exact_witness_association":0,
+                         "line_witness_and_isolated_contrast":0},
+            "clean_cases":{"expected":0,"assessed":0,"defect_or_unclassified_candidate_alerts":0},
+            "missing_spec_cases":{"expected":0,"assessed":0,"no_defect_or_unclassified_candidate":0}}
+    rows=[]; verified=missing=invalid=unscorable=0; known_tokens=0; reserved_unknown=0; incomplete_usage=0
+    for case in dataset:
+        case_id=case["case_id"]; roots=case.get("expected_roots",[])
+        group="bug_cases" if roots else "missing_spec_cases" if case.get("category")=="missing_spec" else "clean_cases"
+        groups[group]["expected"]+=1
+        state=states.get(case_id); row={"case_id":case_id,"group":group}
+        if state is None:
+            missing+=1; row["state"]="missing"; rows.append(row); continue
+        try:
+            if state.get("diagnostic_core_version")!=2: raise ValueError("result is not a v2 diagnosis")
+            if state.get("request_snapshot")!=case.get("request"): raise ValueError("saved request differs from the fixture")
+            core.verify_saved_case_state(state)
+        except (ValueError,TypeError,KeyError,AttributeError) as exc:
+            invalid+=1; row.update(state="invalid",reason=str(exc)[:200]); rows.append(row); continue
+        verified+=1; row["state"]="verified"
+        budget=state.get("budget",{}); confirmed=budget.get("confirmed_usage_tokens")
+        if type(confirmed) is int and confirmed>=0: known_tokens+=confirmed
+        reserved=budget.get("reserved_unknown_tokens")
+        if type(reserved) is int and reserved>=0: reserved_unknown+=reserved
+        if type(confirmed) is not int or confirmed<0 or budget.get("usage_complete") is not True: incomplete_usage+=1
+        row.update(confirmed_tokens=confirmed,usage_complete=budget.get("usage_complete") is True)
+        if not any(t.get("response_complete") is True for t in state.get("model_turns",[]) if isinstance(t,dict)):
+            unscorable+=1; row["state"]="unscorable_no_completed_response"; rows.append(row); continue
+        groups[group]["assessed"]+=1
+        localization=core.v2_localization(state); primary=localization.get("primary_candidate_id")
+        candidate=next((c for c in state.get("candidates",[]) if c.get("id")==primary),None)
+        row["primary_candidate_id"]=primary
+        if group=="clean_cases":
+            groups[group]["defect_or_unclassified_candidate_alerts"]+=int(candidate is not None)
+        elif group=="missing_spec_cases":
+            groups[group]["no_defect_or_unclassified_candidate"]+=int(candidate is None)
+        elif candidate:
+            views=core.v2_result(state).get("findings",[])
+            view=next((f for f in views if f.get("status",{}).get("id")==primary or primary in f.get("status",{}).get("duplicate_candidate_ids",[])),{})
+            locations=view.get("location") if isinstance(view.get("location"),list) else []
+            source=case["request"]["source"]
+            spans=[(a["start_line"],a["end_line"]) for a in core.probe_source_anchors(source,locations)]
+            if not spans:
+                for fragment in core.v2_quoted_fragments(locations):
+                    span,count=core.v2_quote_span(source,fragment)
+                    if span and count==1: spans.append(span)
+            spans=[(a,b) for a,b in spans if b-a+1<=core.V2_SITE_MAX_LINES]
+            matching=[r for r in roots if any(a<=r["source_line"]<=b for a,b in spans)]
+            related=set(candidate.get("current_evidence_ids",[]))
+            for link in candidate.get("evidence_links",[]): related.update(link.get("evidence_ids",[]))
+            witnesses=[e for e in state.get("evidence",[]) if e.get("id") in related and e.get("version_id")=="original"
+                       and core.probe_match(e) is False and any(e.get("input")==r.get("legal_trigger_input") for r in matching)]
+            comparisons=core.probe_causal_comparisons(state,{primary})
+            isolated=any(x.get("original_evidence_id") in {e["id"] for e in witnesses} and x.get("outcome")=="mismatch_removed"
+                         and x.get("isolation")=="single_candidate_single_edit_from_original" for x in comparisons)
+            row.update(primary_line_overlap=bool(matching),line_and_exact_witness_association=bool(witnesses),
+                       line_witness_and_isolated_contrast=isolated)
+            for key in ("primary_line_overlap","line_and_exact_witness_association","line_witness_and_isolated_contrast"):
+                groups[group][key]+=int(row[key])
+        rows.append(row)
+    return {"schema_version":"rootscout.v2_location_eval.v1","cases_expected":len(dataset),"cases_verified":verified,
+            "cases_missing":missing,"cases_invalid":invalid,"cases_unscorable":unscorable,**groups,"semantic_accuracy":None,
+            "usage":{"known_confirmed_tokens":known_tokens,"known_reserved_unknown_tokens":reserved_unknown,
+                     "incomplete_or_unavailable_cases":incomplete_usage+missing+invalid,
+                     "confirmed_tokens":known_tokens if not (incomplete_usage or missing or invalid) else None},
+            "limitations":["These are manually constructed development fixtures, not a representative benchmark.",
+                           "Line overlap and exact witness association do not prove the model's causal explanation.",
+                           "An alternate valid counterexample may not match the frozen witness exactly.",
+                           "A run without a completed model response is unscorable, not a successful abstention.",
+                           "Missing or invalid runs remain visible and are not treated as zero-cost successes."],"cases":rows}
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     subs=parser.add_subparsers(dest="command",required=True)
     w=subs.add_parser("write-samples"); w.add_argument("--out",default=str(DATASET))
+    e=subs.add_parser("export-requests"); e.add_argument("--dataset",default=str(DATASET)); e.add_argument("--out",required=True)
     s=subs.add_parser("score"); s.add_argument("--dataset",default=str(DATASET)); s.add_argument("--results",nargs="*",default=[]); s.add_argument("--reviews"); s.add_argument("--out")
+    v=subs.add_parser("score-v2"); v.add_argument("--dataset",default=str(DATASET)); v.add_argument("--results",nargs="*",default=[]); v.add_argument("--out")
     r=subs.add_parser("run"); r.add_argument("--dataset",default=str(DATASET)); r.add_argument("--out",default="evaluation-runs"); r.add_argument("--provider",choices=("model","replay"),default="replay")
     args=parser.parse_args()
     if args.command=="write-samples":
         print(f"wrote {write_dataset(args.out)} annotated fixtures to {args.out}"); return
+    if args.command=="export-requests":
+        paths=export_requests(read_jsonl(args.dataset),args.out); print(f"exported {len(paths)} requests to {args.out}"); return
     if args.command=="run":
         out=run_dataset(read_jsonl(args.dataset),args.out,args.provider); print(out); return
-    review_map={}
-    if args.reviews:
-        review_map={row["case_id"]:row for row in read_raw_jsonl(args.reviews)}
-    report=score(read_jsonl(args.dataset),load_states(args.results),review_map)
+    if args.command=="score-v2":
+        report=score_v2_locations(read_jsonl(args.dataset),load_states(args.results,reject_duplicates=True))
+        report["dataset_sha256"]=hashlib.sha256(pathlib.Path(args.dataset).read_bytes()).hexdigest()
+    else:
+        review_map={}
+        if args.reviews:
+            review_map={row["case_id"]:row for row in read_raw_jsonl(args.reviews)}
+        report=score(read_jsonl(args.dataset),load_states(args.results),review_map)
     output=json.dumps(report,ensure_ascii=False,indent=2)
     if args.out: pathlib.Path(args.out).write_text(output+"\n",encoding="utf-8")
     print(output)

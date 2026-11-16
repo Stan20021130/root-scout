@@ -1,0 +1,75 @@
+{
+  "schema_version": "rootscout.baseline_audit.v1",
+  "dataset_id": "balanced-100-v1",
+  "manifest_sha256": "db19d1467464458bf857e37754e5d9768437b84bf436938fba466befda0d6633",
+  "results_sha256": "8846e2395d4db4a5b295da8eb97dde1d1ba0d280f48063de80ff4bbd0782f157",
+  "auditor_sha256": "dad06115d4ba157f5418d21c4ca0be084016b290d86cf24dcad4d8752f095dfe",
+  "delivery_engine_sha256": "24cb5c05e746610f5b1c639b08dded093c61ec5126c931445d282358fb6127dc",
+  "case_counts": {
+    "expected": 100,
+    "verified": 100,
+    "missing": 0,
+    "invalid": 0
+  },
+  "role_counts": {
+    "bug": {
+      "expected": 50,
+      "verified": 50,
+      "active_defect_candidate": 49,
+      "active_defect_or_unclassified": 50,
+      "primary_location_syntactically_usable": 43,
+      "trusted_counterexample": 0,
+      "isolated_contrast_observed": 0
+    },
+    "control": {
+      "expected": 50,
+      "verified": 50,
+      "active_defect_candidate": 2,
+      "active_defect_or_unclassified": 2,
+      "primary_location_syntactically_usable": 2,
+      "trusted_counterexample": 0,
+      "isolated_contrast_observed": 0
+    }
+  },
+  "probe_statuses": {
+    "inconclusive": 77,
+    "no_failure_observed": 23
+  },
+  "accuracy": {
+    "defect_accuracy": null,
+    "location_accuracy": null,
+    "reason": "This audit has no independently reviewed defect and source-location labels."
+  },
+  "usage": {
+    "attempted_model_calls": 330,
+    "known_confirmed_tokens": 5942272,
+    "confirmed_tokens": 5942272,
+    "incomplete_or_unavailable_cases": 0,
+    "known_weighted_cost_index": 5192669.0,
+    "weighted_cost_index": 5192669.0,
+    "weights": {
+      "input_miss": 1.0,
+      "input_hit": 0.02,
+      "output": 4.0
+    }
+  },
+  "wall_seconds": {
+    "observed": 100,
+    "median": 82.19,
+    "p90": 176.69
+  },
+  "limitations": [
+    "Candidate counts are not defect or root-cause accuracy.",
+    "A usable source anchor does not establish a correct location or cause.",
+    "Control labels are evaluation labels and may contain real defects.",
+    "The weighted cost index is not a provider invoice; incomplete usage is unknown.",
+    "Saved results describe the engine and model used for those runs, not a new live evaluation."
+  ],
+  "provenance": {
+    "results": "validation/bench-100-full-2026-11-09/results",
+    "dataset_manifest": "validation/codecontests/balanced-100-v1/manifest.json",
+    "documented_engine_snapshot": "root_scout.py",
+    "documented_engine_snapshot_sha256": "ee6da5ad8fc123c45e0dff224d72c5f9c52f8e6762102cda80131a56929e688c",
+    "note": "Retrospective offline audit with the current verifier and delivery comparison; no model rerun. Source results and dataset are excluded from Git."
+  }
+}

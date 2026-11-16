@@ -1,0 +1,1901 @@
+{
+  "experiment": "2026-11-10-paired-v2-full-development-set",
+  "analyzer_sha256": "61e2d339efc4ee599814c8925bb8ede706b5271f266a74446aeb154b6969a128",
+  "batch_analyzer_sha256": "e720057f11ef8c0f0f793e76150abc212b906922ee506b02c6e1d6eb544759c0",
+  "batch_manifests_sha256": [
+    "918981b087142282a73bc9511aaec4c8fb6fff2fbda1c8cc0af39c205bcd4dbe",
+    "bdf882dd561197d1e6b1ef23e0010d7a695f77a1e108fd0e8b1acdf269a9e486"
+  ],
+  "input_fingerprints": [
+    {
+      "manifest_sha256": "918981b087142282a73bc9511aaec4c8fb6fff2fbda1c8cc0af39c205bcd4dbe",
+      "runner_sha256": "8b577a77b724990de3342ceaad938680c3d757be03d2567cfe11989c147cfd4d",
+      "files": {
+        "root_scout.py": "24cb5c05e746610f5b1c639b08dded093c61ec5126c931445d282358fb6127dc",
+        "native_adapter.py": "77e6e9afcfcdf5e12a621f4073655fa1f226af5e199757092e36b588a4db0bbd",
+        "native_transport.py": "b2a2c6ba8bcce971e0b0b298e7a9f76ea82bc03960fe97b8162c422dcba9dade",
+        "probe_hard.py": "8240ad795cd3c2b6515d3eef0b05de3239992d47ad5aabbbc1beedada454be26",
+        "state_feedback.py": "018bc4e85c524ee65fbe3cedfc8e3bcd5b6428771cf8812fa4d0fc20e71cbcf8",
+        "oracle_tools.py": "f7ef2c833513b96ad079a31eb26f30599344ecee7d35fcbea7c69463d13df43b",
+        "evaluation.py": "4a3e47948a005f708213cfda745899a8673ac0c9ac3a5cdc06cfa4eebc2b187f",
+        "evaluation_samples.jsonl": "e37108cb8de6b1e9a91c92f96858549ac258ebc27f9a89a920286c48e839f4e2"
+      }
+    },
+    {
+      "manifest_sha256": "bdf882dd561197d1e6b1ef23e0010d7a695f77a1e108fd0e8b1acdf269a9e486",
+      "runner_sha256": "8b577a77b724990de3342ceaad938680c3d757be03d2567cfe11989c147cfd4d",
+      "files": {
+        "root_scout.py": "24cb5c05e746610f5b1c639b08dded093c61ec5126c931445d282358fb6127dc",
+        "native_adapter.py": "77e6e9afcfcdf5e12a621f4073655fa1f226af5e199757092e36b588a4db0bbd",
+        "native_transport.py": "b2a2c6ba8bcce971e0b0b298e7a9f76ea82bc03960fe97b8162c422dcba9dade",
+        "probe_hard.py": "8240ad795cd3c2b6515d3eef0b05de3239992d47ad5aabbbc1beedada454be26",
+        "state_feedback.py": "018bc4e85c524ee65fbe3cedfc8e3bcd5b6428771cf8812fa4d0fc20e71cbcf8",
+        "oracle_tools.py": "f7ef2c833513b96ad079a31eb26f30599344ecee7d35fcbea7c69463d13df43b",
+        "evaluation.py": "4a3e47948a005f708213cfda745899a8673ac0c9ac3a5cdc06cfa4eebc2b187f",
+        "evaluation_samples.jsonl": "e37108cb8de6b1e9a91c92f96858549ac258ebc27f9a89a920286c48e839f4e2"
+      }
+    }
+  ],
+  "state_hashes": [
+    {
+      "arm": "causal",
+      "case_id": "max-init-python3",
+      "sha256": "01ffc0671caf87cf5d8c4bd2f8d4ef88f7f58590c78788e591a81b5cc7200463"
+    },
+    {
+      "arm": "causal",
+      "case_id": "clean-range_sum-python3",
+      "sha256": "3b373a1dbc360d850af3f6ec8a63a49a1dae471f3d4e08472f73bb8099c62caf"
+    },
+    {
+      "arm": "causal",
+      "case_id": "range-endpoint-cpp17",
+      "sha256": "df1cddc7949fa063c8f2e6fd2d178fba37eb0ff95c069d2ecf0d9679a60d554d"
+    },
+    {
+      "arm": "causal",
+      "case_id": "missing-spec-2-cpp17",
+      "sha256": "4ef66ef279790b38b7eb40e461f56a30770be4cbc7291bf6ac108c5fefa0b428"
+    },
+    {
+      "arm": "causal",
+      "case_id": "range-min-triple-python3",
+      "sha256": "1d529a355356e93dee117377801cee1bcca0d86c5feb9ad1bbf474cc238eda59"
+    },
+    {
+      "arm": "causal",
+      "case_id": "clean-max-cpp17",
+      "sha256": "c35108ef399500aceddbb157d5d63aa0c9f90edeb1bfcaaf974b32bbcdf245c7"
+    },
+    {
+      "arm": "causal",
+      "case_id": "range-double-cpp17",
+      "sha256": "66d9e66e2fb6ec3b02b995144c483a410d00a14cc3581751845b85428ba467c3"
+    },
+    {
+      "arm": "causal",
+      "case_id": "boundary-clean-max-python3",
+      "sha256": "4d2bf96492d0cfad2a41721f055dc0a8fbb8c37dcc0f91182fac230fbf758254"
+    },
+    {
+      "arm": "causal",
+      "case_id": "range-overflow-cpp20",
+      "sha256": "25aa0c836ef29157a46ed53c267a9e811be4f608ae5c1136dc1f93bd96498dc5"
+    },
+    {
+      "arm": "causal",
+      "case_id": "clean-range_min-cpp17",
+      "sha256": "194f6e9b1140cc749248ea15394cdc0b2de32abedad17161899ac82d1ad094f3"
+    },
+    {
+      "arm": "causal",
+      "case_id": "max-masked-cpp20",
+      "sha256": "166de5912189c7a0b3438027891b20bf2b5930f71cda88df605b782cf832f8af"
+    },
+    {
+      "arm": "causal",
+      "case_id": "missing-spec-1-python3",
+      "sha256": "37cfb70633cac997136e052f52748a7b7e5893eb3350612a07a94a8859fe7334"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "max-init-python3",
+      "sha256": "1c6b1329bb8e4e8a8ccf41c4cbd4d210f98d8ecec76f35aadea08e949f8c3516"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "clean-range_sum-python3",
+      "sha256": "4024330ae9e7ac6d71ad2d0e8a90e53d33e0e1a973e7527932d6b6abd64e5a30"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "range-endpoint-cpp17",
+      "sha256": "c2f2a3fd54f6d937e027f7e2f96ecf49ef217443eddb226275d4cdcedda3f6fb"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "missing-spec-2-cpp17",
+      "sha256": "e92ed6d9e1bef303483c60d211d559523394dd7f035a73fc1ed742fb9cbb0927"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "range-min-triple-python3",
+      "sha256": "8bd27696971261ac633e523fc6bf2856a0aa61bb105acdfb589982b292c73afc"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "clean-max-cpp17",
+      "sha256": "c850429750ebc8ee669935e480482b40558a38b33146ee5f9e2a48db183ee928"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "range-double-cpp17",
+      "sha256": "1f474489db4edcd1e12fa70fa1e463e08146c7e2af3453a20773312785f732fe"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "boundary-clean-max-python3",
+      "sha256": "24444b74a080219fb910b6882e253fb5600c8f157ed9b149ca9689e5ad4c60cd"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "range-overflow-cpp20",
+      "sha256": "ca81fad4a9a934763da9c99a5ac5467f95652008f945d130841196bcc6bab4c5"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "clean-range_min-cpp17",
+      "sha256": "c890c424c3a5a133ff7c3e15d5804816849a0735cf9e87539063bb208f9f0859"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "max-masked-cpp20",
+      "sha256": "b32186e753552fb1749a1a75623c3c6efa5e864d3b5f7895ad37c25313e9af11"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "missing-spec-1-python3",
+      "sha256": "2999e189e749cc021cba9487d2541f88c2730993a89a8a745087dfce5941df0d"
+    },
+    {
+      "arm": "causal",
+      "case_id": "clean-range_sum-cpp17",
+      "sha256": "1da23578c15de151b80e7d795125ba4010c892a6182d7d9facee414ff64bba1f"
+    },
+    {
+      "arm": "causal",
+      "case_id": "clean-max-python3",
+      "sha256": "fc3e68092cf4dfefce3ce17f2a8830d41d781e66117fddbe411ee33174b0bf0a"
+    },
+    {
+      "arm": "causal",
+      "case_id": "range-endpoint-python3",
+      "sha256": "5651bd5f1f3185cbfb0ea21be15da13c36f6c540adb60ea395c7b3720d7c61a4"
+    },
+    {
+      "arm": "causal",
+      "case_id": "max-init-cpp17",
+      "sha256": "7781d08848f6db4d6b2591ca708df96d45493249ac5b78e4213a1513c7b817cf"
+    },
+    {
+      "arm": "causal",
+      "case_id": "range-overflow-cpp17",
+      "sha256": "ee519dd6c0d89419951a5a1bae1563ec81f0424bde283dd20338d7c709eef945"
+    },
+    {
+      "arm": "causal",
+      "case_id": "range-double-cpp20",
+      "sha256": "81473e4765fec8da2abf2c79bcbc1c30a1581954b0b9bab0e26a76c5551291ee"
+    },
+    {
+      "arm": "causal",
+      "case_id": "max-double-python3",
+      "sha256": "6f416538c0233a1dc0dfb23609f01088a145b50b6c484d6c54c3d3951d26a108"
+    },
+    {
+      "arm": "causal",
+      "case_id": "max-double-cpp17",
+      "sha256": "b9c8122189c6877551bbc1ac65b0d7d5a8e89f23c5ae5d766900353c3c4ab236"
+    },
+    {
+      "arm": "causal",
+      "case_id": "boundary-clean-range_sum-python3",
+      "sha256": "1bfcca43f35831f7982028af924036afe7026ffa1587985952e886648cda69a0"
+    },
+    {
+      "arm": "causal",
+      "case_id": "boundary-clean-range_sum-cpp17",
+      "sha256": "b380b1bfcdb74ae929e96fbf8bcbdddcd8f7236de7efca8d7760a0550379c2cb"
+    },
+    {
+      "arm": "causal",
+      "case_id": "boundary-clean-max-cpp17",
+      "sha256": "5d28421747a4903ddb6e374b805840936f2a5ce4558ce304664630882ed67ea1"
+    },
+    {
+      "arm": "causal",
+      "case_id": "missing-spec-3-python3",
+      "sha256": "1192eb54d356731cda3efad8e926582d5e5f3197e465f54759529d56d7df59be"
+    },
+    {
+      "arm": "causal",
+      "case_id": "missing-spec-4-cpp17",
+      "sha256": "f227f27156a9b96a6bea04351bea859ccd0094708265fab8d08e7189d2b15635"
+    },
+    {
+      "arm": "causal",
+      "case_id": "clean-range_min-python3",
+      "sha256": "6da19e16e81427fe711f49a63e84ec16535538589168ebb599097250f84036dc"
+    },
+    {
+      "arm": "causal",
+      "case_id": "range-min-init-python3",
+      "sha256": "afb01322fd3dd70bd736832602f224b565b62e292a67ff4b10c51d689cb67cdc"
+    },
+    {
+      "arm": "causal",
+      "case_id": "range-min-init-cpp17",
+      "sha256": "04dab6e24571661913860e9a8a660d3fc9030ea49a4e9df48295ef1b66b70985"
+    },
+    {
+      "arm": "causal",
+      "case_id": "range-min-double-python3",
+      "sha256": "527a6d9bca4d0c4f2f0141d03a72e8eaf851a5e90a91e64a84cbf9efdfea86bb"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "clean-range_sum-cpp17",
+      "sha256": "87933e992259da23ce3b3212c74b980f393cc03798de8bacefc2cd0c82a195d8"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "clean-max-python3",
+      "sha256": "5e6f296a21098f7413920ce813ff2f0b7a48ff98f900b4b2ea58a48032f2fad6"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "range-endpoint-python3",
+      "sha256": "57154fc641dc6fb8ff51f99a90ad537d1211547d9ed7a4a8a3ba752445e3a348"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "max-init-cpp17",
+      "sha256": "2d38a9bad67d5bf2f2b8337d97d2f548ddaae39cabb2a46270a397300c640ac7"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "range-overflow-cpp17",
+      "sha256": "9662529cfeb391eabfab91d10b4e115ddf330811517c31e45e489faee30b7d38"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "range-double-cpp20",
+      "sha256": "a19f4c9da4da7539059297584696911ade4ace7262ad022acc4df265717fca2d"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "max-double-python3",
+      "sha256": "83fccd54367bb9503fb56fa007ee1daace913812057c490da9c480ba37f3cab0"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "max-double-cpp17",
+      "sha256": "0b8bc9de9c19be6c3f0fbf42aed3a798c6928c7c60682d8cc766a9361b7deda3"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "boundary-clean-range_sum-python3",
+      "sha256": "9a95c277d77ebbc9cbf1fb874f4099bed5d63fd240cd97a6142c7f685f8cd8c7"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "boundary-clean-range_sum-cpp17",
+      "sha256": "a1a15380ccc11c7d12c9576eb7afda5c112f46cb0fba852322b80d11914f5048"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "boundary-clean-max-cpp17",
+      "sha256": "6b7db324c89ba4973bd3eb3365e60a5e49df431928dbd769620fd7af20449593"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "missing-spec-3-python3",
+      "sha256": "4ca4a1da8509f01fad9d346dfe81e5ea6831a858e4aa3c25a5bc38cb8c411da7"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "missing-spec-4-cpp17",
+      "sha256": "95d19292c8a7e3fdb8a916d13f679d1727075908596395a0f7192e89f2ce225e"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "clean-range_min-python3",
+      "sha256": "e9b728b0ec4d360880afd4dfc61a9874a6d952425fa8fe72c1c507ee5ca041ee"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "range-min-init-python3",
+      "sha256": "06256944d8abe22697375f6cbfd1abce9f7e634c61c478ea853c3f9a4fbbbd24"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "range-min-init-cpp17",
+      "sha256": "d44a1a122aa7a14c6b13668a9c62e75f0250d7fdb4250b53deb386b25989933d"
+    },
+    {
+      "arm": "one_shot",
+      "case_id": "range-min-double-python3",
+      "sha256": "e9c55939e0a6e3194c8a45540b8615071b79032cde5497f90b9c3fa7900f26bc"
+    }
+  ],
+  "arms": {
+    "causal": {
+      "cases_expected": 32,
+      "cases_verified": 29,
+      "cases_unscorable": 9,
+      "cases_missing": 3,
+      "cases_invalid": 0,
+      "bug_cases": {
+        "expected": 18,
+        "assessed": 12,
+        "primary_line_overlap": 10,
+        "line_and_exact_witness_association": 10,
+        "line_witness_and_isolated_contrast": 0
+      },
+      "clean_cases": {
+        "expected": 10,
+        "assessed": 6,
+        "defect_or_unclassified_candidate_alerts": 0
+      },
+      "missing_spec_cases": {
+        "expected": 4,
+        "assessed": 2,
+        "no_defect_or_unclassified_candidate": 0
+      },
+      "semantic_accuracy": null,
+      "usage": {
+        "known_confirmed_tokens": 181561,
+        "known_reserved_unknown_tokens": 334385,
+        "incomplete_or_unavailable_cases": 12,
+        "confirmed_tokens": null
+      },
+      "attempted_model_calls": 41,
+      "weighted_index": null,
+      "cases": [
+        {
+          "case_id": "max-init-python3",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4093,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 2554.32,
+          "wall_seconds": 10.343000000000757,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "clean-range_sum-python3",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 19023,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 3,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 23885.4,
+          "wall_seconds": 59.125,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-endpoint-cpp17",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 5088,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 5443.44,
+          "wall_seconds": 15.95299999999952,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "missing-spec-2-cpp17",
+          "group": "missing_spec_cases",
+          "state": "verified",
+          "confirmed_tokens": 11875,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "stop_reason": "oracle_unresolved",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 2,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 20091.26,
+          "wall_seconds": 36.26499999999942,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-min-triple-python3",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 17760,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "budget_exhausted",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 2,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [
+            "model_response_failed"
+          ],
+          "weighted_index": 38087.12,
+          "wall_seconds": 64.40599999999904,
+          "final_review_status": "not_available"
+        },
+        {
+          "case_id": "clean-max-cpp17",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 8780,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "no_failure_observed",
+          "attempted_model_calls": 2,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 4559.8,
+          "wall_seconds": 31.64099999999962,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-double-cpp17",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 5779,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": false,
+          "line_and_exact_witness_association": false,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 8207.44,
+          "wall_seconds": 19.20299999999952,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "boundary-clean-max-python3",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 3889,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "no_failure_observed",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 1150.12,
+          "wall_seconds": 8.688000000000102,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-overflow-cpp20",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4646,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 3618.44,
+          "wall_seconds": 13.235000000000582,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "clean-range_min-cpp17",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 21575,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 3,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 30480.84,
+          "wall_seconds": 100.25,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "max-masked-cpp20",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4401,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 3549.88,
+          "wall_seconds": 12.60899999999856,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "missing-spec-1-python3",
+          "group": "missing_spec_cases",
+          "state": "verified",
+          "confirmed_tokens": 9564,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "stop_reason": "oracle_unresolved",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 2,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 12454.2,
+          "wall_seconds": 24.235000000000582,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "clean-range_sum-cpp17",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 12469,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "no_failure_observed",
+          "attempted_model_calls": 2,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 16941.68,
+          "wall_seconds": 38.89000000000124,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "clean-max-python3",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 17353,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 3,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 18428.48,
+          "wall_seconds": 74.60900000000038,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-endpoint-python3",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4552,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 3404.44,
+          "wall_seconds": 11.014999999999418,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "max-init-cpp17",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4281,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 2454.68,
+          "wall_seconds": 11.82799999999952,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-overflow-cpp17",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4655,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 3654.44,
+          "wall_seconds": 13.313000000000102,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-double-cpp20",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 13123,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": false,
+          "line_and_exact_witness_association": false,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "budget_exhausted",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 2,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [
+            "model_response_failed"
+          ],
+          "weighted_index": 16570.04,
+          "wall_seconds": 41.85900000000038,
+          "final_review_status": "not_available"
+        },
+        {
+          "case_id": "max-double-python3",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4215,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 2782.44,
+          "wall_seconds": 10.90599999999904,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "max-double-cpp17",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4440,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 3105.62,
+          "wall_seconds": 12.75,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "boundary-clean-range_sum-python3",
+          "group": "clean_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37697,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 48.0619999999999,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "boundary-clean-range_sum-cpp17",
+          "group": "clean_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37786,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 7.390000000001237,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "boundary-clean-max-cpp17",
+          "group": "clean_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37160,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 7.438000000000102,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "missing-spec-3-python3",
+          "group": "missing_spec_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 35333,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 1.6569999999992433,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "missing-spec-4-cpp17",
+          "group": "missing_spec_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 35432,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 1.6560000000008586,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "clean-range_min-python3",
+          "group": "clean_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37750,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 5.531000000000859,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-min-init-python3",
+          "group": "bug_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37730,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 5.593000000000757,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-min-init-cpp17",
+          "group": "bug_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37819,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 7.234000000000378,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-min-double-python3",
+          "group": "bug_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37678,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 5.57799999999952,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-min-triple-cpp17",
+          "group": "bug_cases",
+          "state": "missing"
+        },
+        {
+          "case_id": "range-triple-cpp17",
+          "group": "bug_cases",
+          "state": "missing"
+        },
+        {
+          "case_id": "range-quad-cpp17",
+          "group": "bug_cases",
+          "state": "missing"
+        }
+      ]
+    },
+    "one_shot": {
+      "cases_expected": 32,
+      "cases_verified": 29,
+      "cases_unscorable": 9,
+      "cases_missing": 3,
+      "cases_invalid": 0,
+      "bug_cases": {
+        "expected": 18,
+        "assessed": 12,
+        "primary_line_overlap": 10,
+        "line_and_exact_witness_association": 10,
+        "line_witness_and_isolated_contrast": 1
+      },
+      "clean_cases": {
+        "expected": 10,
+        "assessed": 6,
+        "defect_or_unclassified_candidate_alerts": 0
+      },
+      "missing_spec_cases": {
+        "expected": 4,
+        "assessed": 2,
+        "no_defect_or_unclassified_candidate": 1
+      },
+      "semantic_accuracy": null,
+      "usage": {
+        "known_confirmed_tokens": 98342,
+        "known_reserved_unknown_tokens": 334385,
+        "incomplete_or_unavailable_cases": 12,
+        "confirmed_tokens": null
+      },
+      "attempted_model_calls": 29,
+      "weighted_index": null,
+      "cases": [
+        {
+          "case_id": "max-init-python3",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4021,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 1639.12,
+          "wall_seconds": 8.734000000000378,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "clean-range_sum-python3",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 6286,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 10537.32,
+          "wall_seconds": 25.32799999999952,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-endpoint-cpp17",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4399,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": false,
+          "line_and_exact_witness_association": false,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 2060.24,
+          "wall_seconds": 11.843999999999141,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "missing-spec-2-cpp17",
+          "group": "missing_spec_cases",
+          "state": "verified",
+          "confirmed_tokens": 4110,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "oracle_unresolved",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 4071.32,
+          "wall_seconds": 9.031000000000859,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-min-triple-python3",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 5541,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 6658.24,
+          "wall_seconds": 16.218000000000757,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "clean-max-cpp17",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 3915,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "no_failure_observed",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 1590.88,
+          "wall_seconds": 10.26600000000144,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-double-cpp17",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 5706,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 7288.24,
+          "wall_seconds": 18.39100000000144,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "boundary-clean-max-python3",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 4558,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 4327.88,
+          "wall_seconds": 13.703000000001339,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-overflow-cpp20",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 5329,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": true,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 5597.8,
+          "wall_seconds": 20.625,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "clean-range_min-cpp17",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 7433,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 14682.44,
+          "wall_seconds": 42.85900000000038,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "max-masked-cpp20",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4486,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 3262.68,
+          "wall_seconds": 13.42200000000048,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "missing-spec-1-python3",
+          "group": "missing_spec_cases",
+          "state": "verified",
+          "confirmed_tokens": 3950,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "stop_reason": "oracle_unresolved",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 3557.32,
+          "wall_seconds": 9.15599999999904,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "clean-range_sum-cpp17",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 5538,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "no_failure_observed",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 6439.8,
+          "wall_seconds": 26.75,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "clean-max-python3",
+          "group": "clean_cases",
+          "state": "verified",
+          "confirmed_tokens": 4714,
+          "usage_complete": true,
+          "primary_candidate_id": null,
+          "stop_reason": "no_bug_found_within_scope",
+          "probe_status": "no_failure_observed",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 4772.44,
+          "wall_seconds": 23.438000000000102,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-endpoint-python3",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4531,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 2693.24,
+          "wall_seconds": 10.735000000000582,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "max-init-cpp17",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4203,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 2644.44,
+          "wall_seconds": 11.17200000000048,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-overflow-cpp17",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4983,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 4213.8,
+          "wall_seconds": 14.609000000000378,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-double-cpp20",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 5679,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": false,
+          "line_and_exact_witness_association": false,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 7807.44,
+          "wall_seconds": 18.811999999999898,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "max-double-python3",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4597,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 3934.12,
+          "wall_seconds": 13.438000000000102,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "max-double-cpp17",
+          "group": "bug_cases",
+          "state": "verified",
+          "confirmed_tokens": 4363,
+          "usage_complete": true,
+          "primary_candidate_id": "C0001",
+          "primary_line_overlap": true,
+          "line_and_exact_witness_association": true,
+          "line_witness_and_isolated_contrast": false,
+          "stop_reason": "defect_reproduced",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "reserved_unknown_tokens": 0,
+          "model_response_complete": true,
+          "error_classes": [],
+          "weighted_index": 3296.44,
+          "wall_seconds": 12.734000000000378,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "boundary-clean-range_sum-python3",
+          "group": "clean_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37697,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 28.813000000000102,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "boundary-clean-range_sum-cpp17",
+          "group": "clean_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37786,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 14.515999999999622,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "boundary-clean-max-cpp17",
+          "group": "clean_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37160,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 7.390999999999622,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "missing-spec-3-python3",
+          "group": "missing_spec_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 35333,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 1.6710000000002765,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "missing-spec-4-cpp17",
+          "group": "missing_spec_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 35432,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 1.6409999999996217,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "clean-range_min-python3",
+          "group": "clean_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "inconclusive",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37750,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 5.593999999999141,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-min-init-python3",
+          "group": "bug_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37730,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 5.671999999998661,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-min-init-cpp17",
+          "group": "bug_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37819,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 7.45299999999952,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-min-double-python3",
+          "group": "bug_cases",
+          "state": "unscorable_no_completed_response",
+          "stop_reason": "model_protocol_incomplete",
+          "probe_status": "counterexample_found",
+          "attempted_model_calls": 1,
+          "confirmed_tokens": 0,
+          "reserved_unknown_tokens": 37678,
+          "usage_complete": false,
+          "model_response_complete": false,
+          "error_classes": [
+            "transport_failed"
+          ],
+          "weighted_index": null,
+          "wall_seconds": 5.515999999999622,
+          "final_review_status": "not_needed"
+        },
+        {
+          "case_id": "range-min-triple-cpp17",
+          "group": "bug_cases",
+          "state": "missing"
+        },
+        {
+          "case_id": "range-triple-cpp17",
+          "group": "bug_cases",
+          "state": "missing"
+        },
+        {
+          "case_id": "range-quad-cpp17",
+          "group": "bug_cases",
+          "state": "missing"
+        }
+      ]
+    }
+  },
+  "scorable_pair_count": 20,
+  "paired_complete_usage": {
+    "pair_count": 20,
+    "causal": {
+      "confirmed_tokens": 181561,
+      "attempted_model_calls": 32,
+      "weighted_index": 221424.08
+    },
+    "one_shot": {
+      "confirmed_tokens": 98342,
+      "attempted_model_calls": 20,
+      "weighted_index": 101075.2
+    }
+  },
+  "pairs": [
+    {
+      "case_id": "max-init-python3",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -72,
+      "primary_line_overlap": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_and_exact_witness_association": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "clean-range_sum-python3",
+      "group": "clean_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -12737,
+      "primary_candidate_present": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "range-endpoint-cpp17",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -689,
+      "primary_line_overlap": {
+        "causal": true,
+        "one_shot": false
+      },
+      "line_and_exact_witness_association": {
+        "causal": true,
+        "one_shot": false
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "missing-spec-2-cpp17",
+      "group": "missing_spec_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -7765,
+      "primary_candidate_present": {
+        "causal": true,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "range-min-triple-python3",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -12219,
+      "primary_line_overlap": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_and_exact_witness_association": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "clean-max-cpp17",
+      "group": "clean_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -4865,
+      "primary_candidate_present": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "range-double-cpp17",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -73,
+      "primary_line_overlap": {
+        "causal": false,
+        "one_shot": true
+      },
+      "line_and_exact_witness_association": {
+        "causal": false,
+        "one_shot": true
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "boundary-clean-max-python3",
+      "group": "clean_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": 669,
+      "primary_candidate_present": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "range-overflow-cpp20",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": 683,
+      "primary_line_overlap": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_and_exact_witness_association": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": true
+      }
+    },
+    {
+      "case_id": "clean-range_min-cpp17",
+      "group": "clean_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -14142,
+      "primary_candidate_present": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "max-masked-cpp20",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": 85,
+      "primary_line_overlap": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_and_exact_witness_association": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "missing-spec-1-python3",
+      "group": "missing_spec_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -5614,
+      "primary_candidate_present": {
+        "causal": true,
+        "one_shot": true
+      }
+    },
+    {
+      "case_id": "clean-range_sum-cpp17",
+      "group": "clean_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -6931,
+      "primary_candidate_present": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "clean-max-python3",
+      "group": "clean_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -12639,
+      "primary_candidate_present": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "range-endpoint-python3",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -21,
+      "primary_line_overlap": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_and_exact_witness_association": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "max-init-cpp17",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -78,
+      "primary_line_overlap": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_and_exact_witness_association": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "range-overflow-cpp17",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": 328,
+      "primary_line_overlap": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_and_exact_witness_association": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "range-double-cpp20",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -7444,
+      "primary_line_overlap": {
+        "causal": false,
+        "one_shot": false
+      },
+      "line_and_exact_witness_association": {
+        "causal": false,
+        "one_shot": false
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "max-double-python3",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": 382,
+      "primary_line_overlap": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_and_exact_witness_association": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "max-double-cpp17",
+      "group": "bug_cases",
+      "both_scorable": true,
+      "confirmed_token_difference_one_shot_minus_causal": -77,
+      "primary_line_overlap": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_and_exact_witness_association": {
+        "causal": true,
+        "one_shot": true
+      },
+      "line_witness_and_isolated_contrast": {
+        "causal": false,
+        "one_shot": false
+      }
+    },
+    {
+      "case_id": "boundary-clean-range_sum-python3",
+      "group": "clean_cases",
+      "both_scorable": false
+    },
+    {
+      "case_id": "boundary-clean-range_sum-cpp17",
+      "group": "clean_cases",
+      "both_scorable": false
+    },
+    {
+      "case_id": "boundary-clean-max-cpp17",
+      "group": "clean_cases",
+      "both_scorable": false
+    },
+    {
+      "case_id": "missing-spec-3-python3",
+      "group": "missing_spec_cases",
+      "both_scorable": false
+    },
+    {
+      "case_id": "missing-spec-4-cpp17",
+      "group": "missing_spec_cases",
+      "both_scorable": false
+    },
+    {
+      "case_id": "clean-range_min-python3",
+      "group": "clean_cases",
+      "both_scorable": false
+    },
+    {
+      "case_id": "range-min-init-python3",
+      "group": "bug_cases",
+      "both_scorable": false
+    },
+    {
+      "case_id": "range-min-init-cpp17",
+      "group": "bug_cases",
+      "both_scorable": false
+    },
+    {
+      "case_id": "range-min-double-python3",
+      "group": "bug_cases",
+      "both_scorable": false
+    },
+    {
+      "case_id": "range-min-triple-cpp17",
+      "group": "bug_cases",
+      "both_scorable": false
+    },
+    {
+      "case_id": "range-triple-cpp17",
+      "group": "bug_cases",
+      "both_scorable": false
+    },
+    {
+      "case_id": "range-quad-cpp17",
+      "group": "bug_cases",
+      "both_scorable": false
+    }
+  ],
+  "weighted_index_weights": {
+    "input_miss": 1,
+    "input_hit": 0.02,
+    "output": 4
+  },
+  "limitations": [
+    "The full set consists of 32 manually constructed development fixtures; it is neither representative nor blind.",
+    "The token admission cap causes native_adapter to fall back to the ordinary chat transport, unlike the unlimited native default.",
+    "A token admission limit and an accounting stop are not provider monetary guarantees.",
+    "Model outcomes are stochastic; one paired run cannot establish semantic non-inferiority.",
+    "The extension was chosen after inspecting the 12-case pilot; it includes all remaining fixtures in dataset order.",
+    "Cases without a completed model response are unscorable, not successful abstentions.",
+    "Failed requests may have unreported provider usage; their reservation is not an actual charge.",
+    "The weighted index is not a provider invoice.",
+    "Line and exact-witness matches are proxies; semantic accuracy remains unmeasured."
+  ]
+}

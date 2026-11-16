@@ -52,7 +52,7 @@ CLI (diagnose / replay / doctor)
  ├─ 摄入   v2_process_response → v2_register_candidate（先落账，再校验动作）
  ├─ 执行   v2_execute_action：read_source / run_original / run_bash / run_variant
  ├─ 证据   v2_execute_source → T 记录（trusted_expected 只来自 caller 测试或 controller Oracle）
- ├─ 修复   response_repairs ｜ clarify(≤2) ｜ edit_range_repairs(±1 行) ｜ 控制器去重
+ ├─ 修复   response_repairs ｜ clarify(≤2) ｜ edit_range_repairs(±1 行) ｜ action_repair(1 轮) ｜ 控制器去重
  └─ 收尾   stop_reason + v2_localization
       │
       ├──► 执行层  Docker 镜像 5105aa6b：run_case / docker_bash_run / BashSession / BuildCache
@@ -144,7 +144,7 @@ CLI (diagnose / replay / doctor)
 |---|---|---|---|
 | 1 | **位置漂移**：同题复跑指到不同行 | p091 78 → 38–84 | 无法承诺单行定位 |
 | 2 | ~~受信不符被判成"未决"~~ **已修（2026-11-10）** | 现在判 `defect_reproduced`；协议失败仍优先占标签，但 `localization.reproduced` / `reproduced_case` 会保留反例本身 | 报告第一行直接给"输入 / 你的输出 / 期望" |
-| 3 | **被拒动作没有认领通道** | p035/p025 的 `run_variant` 行区间差一行；p049/p095 的 A0007/A0001 | 一次单点错误直接毁掉整条结论 |
+| 3 | ~~被拒动作没有认领通道~~ **已修（2026-11-10）** | p035 那次 ±1 行滑差已被 `4f7ddf5` 自动修复（用保存的提案在现行代码上实测可直接应用）；剩下的类别（差 ≥2 行、`old_text` 不唯一、未知 ref）现在收尾前有一次有界修复轮：把拒绝原因和声明区间回给模型，重提成功则原记录标 `repair_status=repaired` 且不再阻断判定，没修复仍判 `model_protocol_incomplete` | 拒绝记录全部留在账本；`probe.json` 新增 gap `rejected_actions_replaced` |
 | 4 | kind 标签抖动 | p037 硬反例写成 `unclassified`；p089 写成 `resource_concern` | 严格口径对标签过敏 |
 | 5 | "真 UB 但不改输出"无维度 | p061 | 只能记成 control 警报 |
 | 6 | 题面自带测试全通过 | 100 题 `mismatches=0` | B 模式下没有可复现的失败锚点 |
@@ -235,7 +235,7 @@ $env:ROOT_SCOUT_INTEGRATION=1; python -m pytest test_sandbox_integration.py -q  
 
 1. **修 verdict 词汇**：受信不符 → `defect_reproduced`，别再说"未决"。改动小、语义明确。
 2. **测位置稳定性**：同 2 题各 5 次采样，统计"指到的函数"是否一致（而不是行号）。这是能否承诺单行定位的前提。
-3. **被拒动作认领通道**：第二次机会或显式 acknowledge，与 schema 澄清分开。
+3. ~~**被拒动作认领通道**~~ **已做（2026-11-10）**：收尾前一次有界修复轮，与 schema 澄清分开；未修复仍照旧判协议失败。下一步是把"修复轮成功率"在真实题目上量出来。
 4. **卡片以反例为主语**：把"你的程序在 X 上输出 Y，正确 Z"放第一行。
 5. 若要做 A 模式产品化：把"用户提供失败用例"变成一等输入，并按难度给出成本/时延预估。
 

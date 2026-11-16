@@ -240,9 +240,12 @@ class SchemaClarificationStopTests(unittest.TestCase):
         supplied=iter(responses); prompts=[]
         def ask(_client,phase,prompt,budget,**kwargs):
             prompts.append((phase,json.loads(prompt)))
+            response=copy.deepcopy(next(supplied))
+            raw=json.dumps(response,ensure_ascii=False)
             budget.add({"phase":phase,"status":"ok","confirmed_usage_tokens":1,
-                        "reserved_unknown_tokens":0,"usage_complete":True})
-            return copy.deepcopy(next(supplied))
+                        "reserved_unknown_tokens":0,"usage_complete":True,
+                        "raw_content":raw,"visible_response_sha256":core.sha(raw)})
+            return response
         def runner(_src,_lang,case,_env,profile="formal",build_cache=None):
             return {"status":"ok","returncode":0,"stdout":case.get("expected",""),
                     "stderr":"","matched":True,"wall_seconds":0}
@@ -284,6 +287,160 @@ class SchemaClarificationStopTests(unittest.TestCase):
         self.assertEqual(len(state["protocol_issues"]),3)
         self.assertEqual(state["stop_reason"],"no_bug_found_within_scope")
         self.assertEqual(core.v2_tolerated_issue_turns(state),[3])
+
+    def test_two_responses_in_one_turn_keep_distinct_candidate_records(self):
+        first=answer(candidates=[{"ref":"first","claim":"First concern."}],
+                     actions=[{"kind":"run_bash","question":"missing command"}],stop=False)
+        clarified=answer(candidates=[{"ref":"second","claim":"Different concern."}],
+                         protocol_recovery={"issue_turns":[1],"reason":"Discarded the malformed tester."})
+        state,_=self.diagnose([first,clarified])
+        self.assertEqual([r["proposal"]["claim"] for r in state["raw_candidates"]],
+                         ["First concern.","Different concern."])
+        forged=copy.deepcopy(state)
+        forged["raw_candidates"][1]["proposal"]["claim"]="A forged concern."
+        forged["raw_candidates"][1]["proposal_sha256"]=core.canonical_sha(forged["raw_candidates"][1]["proposal"])
+        forged["integrity"]=core.v2_integrity(forged)
+        with self.assertRaises(ValueError):
+            core.verify_saved_case_state(forged)
+
+    def test_schema_clarification_can_return_another_invalid_response(self):
+        first=answer(actions=[{"kind":"run_bash","question":"missing command"}],stop=False)
+        still_invalid=answer(actions=[{"kind":"run_bash","question":"still missing command"}])
+        state,_=self.diagnose([first,still_invalid])
+        self.assertEqual(state["protocol_clarifications"][0]["status"],"failed")
+        forged=copy.deepcopy(state)
+        forged["protocol_clarifications"][0]["status"]="recovered"
+        forged["integrity"]=core.v2_integrity(forged)
+        with self.assertRaises(ValueError):
+            core.verify_saved_case_state(forged)
+
+    def test_schema_clarification_replays_without_counting_old_model_calls(self):
+        first=answer(actions=[{"kind":"run_bash","question":"missing command"}],stop=False)
+        clarified=answer(protocol_recovery={"issue_turns":[1],"reason":"Discarded the malformed tester."})
+        state,_=self.diagnose([first,clarified])
+        def runner(_src,_lang,case,_env,profile="formal",build_cache=None):
+            return {"status":"ok","returncode":0,"stdout":case.get("expected",""),
+                    "stderr":"","matched":True,"wall_seconds":0}
+        with patch.dict(os.environ,{},clear=True), \
+             patch.object(core,"docker_preflight",return_value={"available":True,"image_id":"fixture"}), \
+             patch.object(core,"run_case",side_effect=runner), \
+             patch.object(core.OpenAICompatible,"ask",side_effect=AssertionError("replay must not call a model")):
+            replay=core.diagnose_v2(state["request_snapshot"],provider="replay",replay_state=state)
+            repeated=core.diagnose_v2(state["request_snapshot"],provider="replay",replay_state=replay)
+        self.assertEqual(replay["budget"]["calls"],[])
+        self.assertEqual(replay["protocol_clarifications"],state["protocol_clarifications"])
+        self.assertEqual(core.verify_saved_case_state(replay),replay)
+        self.assertEqual(repeated["budget"]["calls"],[])
+        self.assertEqual(core.verify_saved_case_state(repeated),repeated)
+        forged=copy.deepcopy(replay)
+        forged["replay_source"]["model_calls"][0]["raw_content"]='{"candidates":[]}'
+        forged["replay_source"]["model_calls"][0]["visible_response_sha256"]=core.sha('{"candidates":[]}')
+        forged["integrity"]=core.v2_integrity(forged)
+        with self.assertRaises(ValueError):
+            core.verify_saved_case_state(forged)
+
+    def test_replay_keeps_action_ids_when_a_prior_bash_action_was_blocked(self):
+        def bash_action(ref):
+            return {"kind":"run_bash","ref":ref,"command":"echo test","question":"Inspect the output."}
+        responses=iter([answer(actions=[bash_action("a")],next_question="Continue.",stop=False),
+                        answer(actions=[bash_action("b")],next_question="Review the observation.",stop=False),
+                        answer(candidates=[{"ref":"c","claim":"A possible issue.","evidence_ids":["A0001","A0002"]}])])
+        def ask(_client,phase,prompt,budget,**kwargs):
+            response=next(responses); raw=json.dumps(response)
+            budget.add({"phase":phase,"status":"ok","raw_content":raw,"visible_response_sha256":core.sha(raw),"usage_complete":True})
+            return copy.deepcopy(response)
+        def runner(_src,_lang,case,_env,profile="formal",build_cache=None):
+            return {"status":"ok","returncode":0,"stdout":case.get("expected",""),"stderr":"","wall_seconds":0}
+        timeout={"status":"timeout","exit_code":124,"stdout":"partial","stderr":"","timed_out":True}
+        completed={"status":"ok","exit_code":0,"stdout":"observation","stderr":"","timed_out":False}
+        with patch.dict(os.environ,{},clear=True), \
+             patch.object(core,"docker_preflight",return_value={"available":True,"image_id":"fixture"}), \
+             patch.object(core,"run_case",side_effect=runner),patch.object(core.OpenAICompatible,"ask",new=ask), \
+             patch.object(core,"docker_bash_run",side_effect=[timeout,completed]):
+            state=core.diagnose_v2(core.load_json("examples/max_oracle_demo.json"))
+        self.assertEqual(core.verify_saved_case_state(state),state)
+        with patch.dict(os.environ,{},clear=True), \
+             patch.object(core,"docker_preflight",return_value={"available":True,"image_id":"fixture"}), \
+             patch.object(core,"run_case",side_effect=runner),patch.object(core,"docker_bash_run",return_value=completed) as replay_bash:
+            replay=core.diagnose_v2(state["request_snapshot"],provider="replay",replay_state=state)
+        self.assertEqual(replay_bash.call_count,1)
+        self.assertEqual([(a["id"],a["status"]) for a in replay["tool_actions"]],[("A0001","blocked"),("A0002","accepted")])
+        self.assertEqual(replay["tool_actions"][0]["replay_status"],"not_reexecuted")
+        self.assertEqual(replay["candidates"][0]["current_evidence_ids"],["A0001","A0002"])
+        self.assertEqual(core.verify_saved_case_state(replay),replay)
+        historical=next(e for e in core.v2_result(replay)["findings"][0]["evidence"] if e["id"]=="A0001")
+        self.assertEqual(historical["replay_status"],"not_reexecuted")
+        self.assertIn("original run",historical["interpretation"])
+
+    def test_replay_reexecutes_blocked_action_with_evidence_or_fails_closed(self):
+        response=answer(actions=[{"kind":"run_original","ref":"r","input":"1\n-7\n","question":"Observe the negative value."}])
+        def ask(_client,phase,prompt,budget,**kwargs):
+            raw=json.dumps(response)
+            budget.add({"phase":phase,"status":"ok","raw_content":raw,"visible_response_sha256":core.sha(raw),"usage_complete":True})
+            return copy.deepcopy(response)
+        def runner(_src,_lang,case,_env,profile="formal",build_cache=None):
+            if case["input"]=="1\n-7\n":
+                return {"status":"timeout","returncode":None,"stdout":"","stderr":"","wall_seconds":0}
+            return {"status":"ok","returncode":0,"stdout":case.get("expected",""),"stderr":"","wall_seconds":0}
+        req=core.load_json("examples/probe_max.json")
+        with patch.dict(os.environ,{},clear=True), \
+             patch.object(core,"docker_preflight",return_value={"available":True,"image_id":"fixture"}), \
+             patch.object(core,"run_case",side_effect=runner),patch.object(core.OpenAICompatible,"ask",new=ask):
+            state=core.diagnose_v2(req,strategy="one_shot")
+        self.assertEqual(core.verify_saved_case_state(state),state)
+        self.assertEqual(state["tool_actions"][0]["status"],"blocked")
+        def replay_runner(_src,_lang,case,_env,profile="formal",build_cache=None):
+            return {"status":"ok","returncode":0,"stdout":case.get("expected","-7\n"),"stderr":"","wall_seconds":0}
+        with patch.dict(os.environ,{},clear=True), \
+             patch.object(core,"docker_preflight",return_value={"available":True,"image_id":"fixture"}), \
+             patch.object(core,"run_case",side_effect=replay_runner):
+            replay=core.diagnose_v2(req,provider="replay",replay_state=state)
+        self.assertEqual(replay["tool_actions"][0]["status"],"accepted")
+        self.assertEqual(replay["tool_actions"][0]["replayed_from_status"],"blocked")
+        self.assertEqual(replay["evidence"][-1]["id"],state["evidence"][-1]["id"])
+        self.assertEqual(core.verify_saved_case_state(replay),replay)
+        with patch.dict(os.environ,{},clear=True), \
+             patch.object(core,"docker_preflight",return_value={"available":True,"image_id":"fixture"}), \
+             patch.object(core,"run_case",side_effect=replay_runner),patch.object(core,"v2_execute_action",return_value={}):
+            failed=core.diagnose_v2(req,provider="replay",replay_state=state)
+        self.assertEqual(failed["stop_reason"],"failed")
+        self.assertIn("evidence sequence changed",failed["analysis_errors"][0]["message"])
+        self.assertEqual(core.verify_saved_case_state(failed),failed)
+
+    def test_failed_schema_clarification_keeps_the_failed_call_link(self):
+        first=answer(actions=[{"kind":"run_bash","question":"missing command"}])
+        def ask(_client,phase,prompt,budget,**kwargs):
+            if phase=="EXPLORE_V2_CLARIFY":
+                raw='{"candidates":'
+                budget.add({"phase":phase,"status":"failed","error":"JSONDecodeError",
+                            "raw_content":raw,"visible_response_sha256":core.sha(raw),"usage_complete":True})
+                raise json.JSONDecodeError("incomplete",raw,len(raw))
+            raw=json.dumps(first)
+            budget.add({"phase":phase,"status":"ok","raw_content":raw,
+                        "visible_response_sha256":core.sha(raw),"usage_complete":True})
+            return copy.deepcopy(first)
+        def runner(_src,_lang,case,_env,profile="formal",build_cache=None):
+            return {"status":"ok","returncode":0,"stdout":case.get("expected",""),
+                    "stderr":"","matched":True,"wall_seconds":0}
+        with patch.dict(os.environ,{"ROOT_SCOUT_SCHEMA_CLARIFY":"1"},clear=True), \
+             patch.object(core,"docker_preflight",return_value={"available":True,"image_id":"fixture"}), \
+             patch.object(core,"run_case",side_effect=runner), patch.object(core.OpenAICompatible,"ask",new=ask):
+            state=core.diagnose_v2(core.load_json("examples/max_oracle_demo.json"),strategy="one_shot")
+        record=state["protocol_clarifications"][0]
+        self.assertEqual(record["status"],"failed")
+        self.assertEqual(record["clarification_call_index"],1)
+        self.assertEqual(state["budget"]["calls"][1]["clarification_of_call_index"],0)
+        self.assertEqual(core.verify_saved_case_state(state),state)
+        legacy=copy.deepcopy(state)
+        legacy["protocol_clarifications"][0].pop("failed_response_sha256")
+        legacy["protocol_clarifications"][0].pop("clarification_call_index")
+        legacy["budget"]["calls"][1].pop("clarification_of_call_index")
+        legacy["integrity"]=core.v2_integrity(legacy)
+        self.assertEqual(core.verify_saved_case_state(legacy),legacy)
+        legacy["budget"]["calls"][1]["error"]="OtherError"
+        legacy["integrity"]=core.v2_integrity(legacy)
+        with self.assertRaises(ValueError):
+            core.verify_saved_case_state(legacy)
 
 
 @unittest.skipUnless(os.environ.get("ROOT_SCOUT_INTEGRATION")=="1","requires real Docker")

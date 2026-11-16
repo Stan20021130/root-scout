@@ -92,6 +92,62 @@ class EvidenceProbeTests(unittest.TestCase):
         self.assertEqual(report["findings"], [])
         self.assertEqual(report["unverified_candidate_ids"], ["C0001"])
 
+    def test_human_report_shows_verified_mismatch_and_marks_cause_as_unverified(self):
+        self.state["candidates"][0]["source_location_claims"] = ["lines 3-5", "line 3"]
+        with tempfile.TemporaryDirectory() as directory:
+            probe = core.write_probe_artifacts(self.state, directory)
+            path = Path(directory) / "report.md"
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("已复现输出不符", text)
+            self.assertIn("2\n-4 -2", text)
+            self.assertIn("-2", text)
+            self.assertIn("0", text)
+            self.assertIn("未验证", text)
+            self.assertIn("best = 0", text)
+            self.assertIn("第 3–5 行", text)
+            self.assertIn("最小性尚未验证", text)
+            self.assertEqual(probe["artifacts"]["report"]["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+
+    def test_human_report_does_not_guess_a_line_from_ambiguous_location_text(self):
+        self.state["candidates"][0]["source_location_claims"] = ["line 3 or 5"]
+        with tempfile.TemporaryDirectory() as directory:
+            core.write_probe_artifacts(self.state, directory)
+            text = (Path(directory) / "report.md").read_text(encoding="utf-8")
+        self.assertIn("line 3 or 5", text)
+        self.assertNotIn("位置：原始源码第 3 行", text)
+
+    def test_human_report_does_not_strip_whitespace_from_input_preview(self):
+        self.state["evidence"][0]["input"] = "2\n-4 -2  \n\n"
+        with tempfile.TemporaryDirectory() as directory:
+            core.write_probe_artifacts(self.state, directory)
+            text = (Path(directory) / "report.md").read_text(encoding="utf-8")
+        self.assertIn("2\n-4 -2  \n\n```", text)
+
+    def test_human_report_preserves_unverified_clues_without_claiming_a_counterexample(self):
+        self.state["evidence"] = []
+        self.state["stop_reason"] = "oracle_unresolved"
+        with tempfile.TemporaryDirectory() as directory:
+            core.write_probe_artifacts(self.state, directory)
+            text = (Path(directory) / "report.md").read_text(encoding="utf-8")
+        self.assertIn("尚未确认", text)
+        self.assertIn("Zero initialization masks the maximum", text)
+        self.assertIn("未验证", text)
+        self.assertNotIn("已复现输出不符", text)
+
+    def test_human_report_does_not_present_a_variant_failure_as_the_original(self):
+        for evidence in self.state["evidence"]:
+            result = evidence["result"]
+            if evidence["version_id"] == "original":
+                result.update(stdout=evidence["expected"], matched=True)
+            else:
+                result.update(stdout="999\n", matched=False)
+        self.state["stop_reason"] = "oracle_unresolved"
+        with tempfile.TemporaryDirectory() as directory:
+            core.write_probe_artifacts(self.state, directory)
+            text = (Path(directory) / "report.md").read_text(encoding="utf-8")
+        self.assertNotIn("已复现输出不符", text)
+        self.assertNotIn("999", text)
+
     def test_missing_trust_illegal_input_and_execution_failures_never_become_counterexamples(self):
         for alteration in ({"trusted_expected": False}, {"legal_input_verified": False},
                            {"expected_source": ""}, {"result": {"status": "timeout"}},
@@ -168,6 +224,7 @@ class EvidenceProbeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             report = core.write_probe_artifacts(self.state, directory)
             self.assertFalse(report["counterexamples"][0]["reproducer_complete"])
+            self.assertIn("已截断", (Path(directory) / "report.md").read_text(encoding="utf-8"))
             path = Path(report["artifacts"]["case_state"]["path"])
             self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["evidence"][0]["input"], evidence["input"])
             self.assertEqual(report["artifacts"]["case_state"]["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())

@@ -1,7 +1,7 @@
 # best-2026-11-09 — 目前效果最好的一版
 
 `root_scout.py` 快照（498,368 字节，sha256 `ee6da5ad8fc123c45e0dff224d72c5f9c52f8e6762102cda80131a56929e688c`），
-与仓库根目录的 `root_scout.py` 内容一致，随仓库版本化。`validation/` 下的运行结果与 case_state 不进仓库。
+随仓库版本化；仓库根目录的 `root_scout.py` 此后已有改动，不应视为同一版本。`validation/` 下的运行结果与 case_state 不进仓库。
 
 ## 这一版相对老基线改动四处
 

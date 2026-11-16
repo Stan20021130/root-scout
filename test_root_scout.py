@@ -106,7 +106,8 @@ class ValidationTests(unittest.TestCase):
 
     def test_mismatch_is_only_suspected_without_semantic_adjudication(self):
         req={"statement":"要求输出 9","source":"print(0)","language":"python3","known_failing_tests":[{"input":"","expected":"9","trusted":True,"expected_source":"hand checked","legal_input":True,"legal_input_source":"hand checked"}]}
-        with patch.object(root_scout,"docker_run",return_value={"status":"ok","stdout":"0","stderr":"","matched":False}):
+        with patch.object(root_scout,"docker_preflight",return_value={"available":True,"image_id":"sha256:test"}), \
+             patch.object(root_scout,"docker_run",return_value={"status":"ok","stdout":"0","stderr":"","matched":False}):
             state=root_scout._diagnose_legacy(req,provider="replay")
         self.assertEqual(state["evidence"][0]["result"]["evidence_level"],"E1")
         self.assertEqual(state["roots"],[])
@@ -1951,6 +1952,111 @@ class V2DiscoveryTests(unittest.TestCase):
         self.assertEqual(state["stop_reason"],"defect_reproduced")
         self.assertEqual(root_scout.verify_saved_case_state(state),state)
 
+    def test_v2_output_comparison_is_explicit_or_whitespace_difference_is_unresolved(self):
+        req={"statement":"Output the two given numbers.","source":"print('1 ', '2 ')\n","language":"python3",
+             "known_failing_tests":[{"input":"1 2\n","expected":"1\n2\n","trusted":True,
+                                      "expected_source":"the two input numbers","legal_input":True,
+                                      "legal_input_source":"two integers"}]}
+        response={"candidates":[],"updates":[],"actions":[],"next_question":"","stop":True}
+        def runner(_source,_language,_case,_env,profile="formal",build_cache=None):
+            return {"status":"ok","stdout":"1 \n2 \n","stderr":"","returncode":0,"wall_seconds":0.01,"profile":profile}
+        unknown=self.run_v2(req,response,runner=runner)
+        self.assertIsNone(unknown["evidence"][0]["result"]["matched"])
+        self.assertEqual(unknown["coverage"]["trusted_test_status"],"comparison_unresolved")
+        self.assertEqual(unknown["stop_reason"],"oracle_unresolved")
+        self.assertEqual(root_scout.probe_result(unknown)["status"],"inconclusive")
+        self.assertIn("output_comparison_unspecified",root_scout.probe_result(unknown)["scope"]["gaps"])
+        text=root_scout.markdown_probe(unknown,root_scout.probe_result(unknown),root_scout.v2_result(unknown))
+        self.assertIn("输出仅有空白或大小写差异",text)
+        self.assertIn(json.dumps("1 \n2 \n",ensure_ascii=False),text)
+        self.assertNotIn("已复现输出不符",text)
+        self.assertEqual(root_scout.verify_saved_case_state(unknown),unknown)
+        tokens=copy.deepcopy(req)
+        tokens["output_comparison"]={"kind":"whitespace_tokens","source":"judge compares whitespace-separated tokens"}
+        token_state=self.run_v2(tokens,response,runner=runner)
+        self.assertTrue(token_state["evidence"][0]["result"]["matched"])
+        self.assertEqual(root_scout.probe_result(token_state)["status"],"no_failure_observed")
+        self.assertEqual(root_scout.verify_saved_case_state(token_state),token_state)
+        strict=copy.deepcopy(req)
+        strict["output_comparison"]={"kind":"trimmed_text","source":"judge requires these line endings and spaces"}
+        strict_state=self.run_v2(strict,response,runner=runner)
+        self.assertFalse(strict_state["evidence"][0]["result"]["matched"])
+        self.assertEqual(root_scout.probe_result(strict_state)["status"],"counterexample_found")
+        self.assertEqual(root_scout.verify_saved_case_state(strict_state),strict_state)
+        forged=copy.deepcopy(token_state)
+        forged["evidence"][0]["output_comparison"]["kind"]="trimmed_text"
+        forged["integrity"]=root_scout.v2_integrity(forged)
+        with self.assertRaises(ValueError): root_scout.verify_saved_case_state(forged)
+
+    def test_v2_legacy_whitespace_mismatch_is_not_a_confirmed_counterexample(self):
+        req={"statement":"Output the two given numbers.","source":"print('1 ', '2 ')\n","language":"python3",
+             "known_failing_tests":[{"input":"1 2\n","expected":"1\n2\n","trusted":True,
+                                      "expected_source":"the two input numbers","legal_input":True,
+                                      "legal_input_source":"two integers"}]}
+        response={"candidates":[],"updates":[],"actions":[],"next_question":"","stop":True}
+        def runner(_source,_language,_case,_env,profile="formal",build_cache=None):
+            return {"status":"ok","stdout":"1 \n2 \n","stderr":"","returncode":0,"wall_seconds":0.01,"profile":profile}
+        state=self.run_v2(req,response,runner=runner)
+        state["run_configuration"].pop("output_comparison")
+        state["evidence"][0].pop("output_comparison")
+        state["evidence"][0]["result"]["matched"]=False
+        state["coverage"]["trusted_test_count"]["mismatches"]=1
+        state["coverage"]["trusted_test_status"]="mismatch_observed"
+        state["integrity"]=root_scout.v2_integrity(state)
+        self.assertEqual(root_scout.verify_saved_case_state(state),state)
+        self.assertEqual(root_scout.probe_result(state)["status"],"inconclusive")
+        self.assertIn("output_comparison_unspecified",root_scout.probe_result(state)["scope"]["gaps"])
+
+    def test_output_comparison_rules_require_a_source_and_keep_distinct_semantics(self):
+        result={"status":"ok","stdout":"YES \n"}
+        self.assertTrue(root_scout.v2_result_match(result,"yes\n",comparison={"kind":"case_insensitive_tokens"}))
+        self.assertFalse(root_scout.v2_result_match(result,"yes\n",comparison={"kind":"whitespace_tokens"}))
+        self.assertIsNone(root_scout.v2_result_match(result,"yes\n",comparison={"kind":"unspecified"}))
+        self.assertFalse(root_scout.v2_result_match({"status":"ok","stdout":"1"},"1\n",comparison={"kind":"exact_text"}))
+        self.assertTrue(root_scout.v2_result_match({"status":"ok","stdout":"1"},"1\n",comparison={"kind":"trimmed_text"}))
+        for invalid in ({"kind":"whitespace_tokens"},{"kind":"unknown","source":"judge"},
+                        {"kind":"trimmed_text","source":" "}):
+            with self.subTest(comparison=invalid), self.assertRaises(ValueError):
+                root_scout.validate_request(dict(self.req,output_comparison=invalid))
+
+    def test_v2_variant_mismatch_does_not_implicate_the_original(self):
+        import localize_report
+        req={"statement":"Output the integer plus one.","source":"print(int(input()) + 1)\n","language":"python3",
+             "known_failing_tests":[{"input":"41\n","expected":"42\n","trusted":True,
+                                      "expected_source":"41 + 1 = 42","legal_input":True,
+                                      "legal_input_source":"41 is an integer"}]}
+        response={"candidates":[{"kind":"defect_candidate","ref":"c","claim":"Check the operator.","locations":["line 1"]}],
+                  "updates":[],"actions":[{"kind":"run_variant","ref":"v","parent_version_id":"original",
+                  "candidate_refs":["c"],"edits":[{"start_line":1,"end_line":1,
+                  "old_text":"print(int(input()) + 1)","new_text":"print(int(input()) - 1)"}],
+                  "input_refs":["T0001"],"inputs":[],"question":"Compare the variant."}],"next_question":"","stop":True}
+        def runner(source,_language,_case,_env,profile="formal",build_cache=None):
+            return {"status":"ok","stdout":"42\n" if "+ 1" in source else "40\n","stderr":"",
+                    "returncode":0,"wall_seconds":0.01,"profile":profile}
+        state=self.run_v2(req,response,runner=runner)
+        original,variant=state["evidence"]
+        self.assertTrue(original["result"]["matched"])
+        self.assertFalse(variant["result"]["matched"])
+        self.assertEqual(state["coverage"]["trusted_test_count"]["mismatches"],0)
+        self.assertEqual(state["stop_reason"],"oracle_unresolved")
+        self.assertFalse(state["localization"]["reproduced"])
+        self.assertIsNone(state["localization"]["reproduced_case"])
+        self.assertEqual(root_scout.probe_result(state)["summary"]["counterexamples"],0)
+        candidate=dict(state["candidates"][0],current_evidence_ids=[variant["id"]])
+        self.assertEqual(root_scout.v2_evidence_grade(state,candidate),"sandbox_observation")
+        self.assertEqual(localize_report.grade(candidate,localize_report.evidence_index(state))[0],2)
+        self.assertEqual(root_scout.verify_saved_case_state(state),state)
+        rendered_state=copy.deepcopy(state)
+        rendered_state["candidates"][0]=candidate
+        with tempfile.TemporaryDirectory() as directory, patch.object(localize_report,"RESULTS",pathlib.Path(directory)):
+            state_path=pathlib.Path(directory)/"case"/"diagnose"/"case_state.json"
+            state_path.parent.mkdir(parents=True)
+            state_path.write_text(json.dumps(rendered_state),encoding="utf-8")
+            report=localize_report.report("case")
+        self.assertIn("变体 V1",report)
+        self.assertNotIn("你的输出 `40`",report)
+        self.assertNotIn("受信 expected 不符",report)
+
     def test_v2_reproduced_defect_stays_visible_when_a_protocol_failure_wins(self):
         # A protocol failure keeps the label, but the reproduction is never lost.
         def wrong(_source,_language,_case,_env,profile="formal",build_cache=None):
@@ -2536,7 +2642,11 @@ class V2DiscoveryTests(unittest.TestCase):
         action=state["tool_actions"][0]
         self.assertEqual((action["turn"],action["status"]),(1,"rejected"))
         self.assertEqual(action["candidate_links"],[{"ref":"later","candidate_id":None}])
-        self.assertEqual([c["proposal_ref"] for c in state["candidates"]],["seed","later"])
+        self.assertEqual([c["proposal_ref"] for c in state["candidates"][:2]],["seed","later"])
+        # The rejected action earns one bounded repair turn; the scripted model repeats
+        # its last response there, so the repeated claim is registered as a duplicate.
+        self.assertEqual(state["action_repair"]["status"],"unrepaired")
+        self.assertEqual(state["action_repair"]["rejected_action_ids"],["A0001"])
         self.assertEqual(state["candidate_aliases"],{"seed":"C0001","later":"C0002"})
         self.assertEqual(root_scout.verify_saved_case_state(state),state)
         forged=copy.deepcopy(state)
@@ -2544,6 +2654,62 @@ class V2DiscoveryTests(unittest.TestCase):
         forged["integrity"]=root_scout.v2_integrity(forged)
         with self.assertRaisesRegex(ValueError,"associations do not recompute"):
             root_scout.verify_saved_case_state(forged)
+
+    def rejected_variant_packet(self):
+        """A run_variant whose declared range misses the old_text by two lines."""
+        return {"candidates":[{"kind":"defect_candidate","ref":"init","claim":"The zero seed drops all-negative input.","locations":["line 3"]}],
+                "updates":[],"actions":[{"kind":"run_variant","ref":"fix","parent_version_id":"original","candidate_refs":["init"],
+                    "edits":[{"start_line":5,"end_line":5,"old_text":"best=0","new_text":"best=-1000000001"}],
+                    "input_refs":[],"inputs":["1\n-7"],"question":"Compare the sentinel variant."}],
+                "next_question":"","stop":True}
+
+    def test_v2_action_repair_turn_replaces_a_rejected_variant_and_clears_protocol_failure(self):
+        # One bounded extra turn re-submits the rejected proposal, so a single wrong
+        # edit range no longer turns the whole case into a protocol failure.
+        bad=self.rejected_variant_packet()
+        good={"candidates":[],"updates":[],"next_question":"","stop":True,
+              "actions":[{"kind":"run_variant","ref":"fix-retry","parent_version_id":"original","candidate_refs":["init"],
+                  "edits":[{"start_line":3,"end_line":3,"old_text":"best=0","new_text":"best=-1000000001"}],
+                  "input_refs":[],"inputs":["1\n-7"],"question":"Compare the sentinel variant."}]}
+        state,calls=self.run_v2_packets(self.req,[bad,good])
+        self.assertEqual(len(calls),2)
+        self.assertEqual([(a["turn"],a["status"]) for a in state["tool_actions"]],[(1,"rejected"),(2,"accepted")])
+        self.assertEqual(state["tool_actions"][0]["repair_status"],"repaired")
+        self.assertEqual(state["tool_actions"][0]["repaired_by_action_id"],"A0002")
+        self.assertEqual(state["action_repair"]["status"],"repaired")
+        self.assertEqual(state["action_repair"]["repaired_action_ids"],["A0001"])
+        self.assertEqual(state["stop_reason"],"defect_reproduced")
+        self.assertEqual(root_scout.verify_saved_case_state(state),state)
+        probe=root_scout.probe_result(state)
+        self.assertIn("rejected_actions_replaced",probe["scope"]["gaps"])
+        self.assertNotIn("tool_actions_not_completed",probe["scope"]["gaps"])
+        self.assertEqual(probe["scope"]["blocked_action_ids"],[])
+        self.assertIn("已用修正后的动作重新执行",root_scout.markdown_probe(state,probe,root_scout._v2_candidate_result(state)))
+
+    def test_v2_action_repair_is_bounded_and_keeps_an_unrepaired_rejection_blocking(self):
+        bad=self.rejected_variant_packet()
+        state,calls=self.run_v2_packets(self.req,[bad,self.rejected_variant_packet()])
+        self.assertEqual(len(calls),2)                      # one repair turn, never a second
+        self.assertEqual([a["status"] for a in state["tool_actions"]],["rejected","rejected"])
+        self.assertEqual(state["action_repair"]["status"],"unrepaired")
+        self.assertEqual(state["action_repair"]["unresolved_action_ids"],["A0001","A0002"])
+        self.assertEqual(state["stop_reason"],"model_protocol_incomplete")
+        self.assertIn("tool_actions_not_completed",root_scout.probe_result(state)["scope"]["gaps"])
+        self.assertEqual(root_scout.verify_saved_case_state(state),state)
+
+    def test_v2_action_repair_never_runs_in_one_shot(self):
+        bad=self.rejected_variant_packet()
+        calls=[]
+        def ask(_model,phase,_prompt,budget,max_output=None):
+            calls.append(phase)
+            budget.add({"phase":phase,"status":"ok","confirmed_usage_tokens":5,"reserved_unknown_tokens":0,"usage_complete":True})
+            return copy.deepcopy(bad)
+        with patch.object(root_scout,"docker_preflight",return_value={"available":True,"image_id":"sha256:v2-test"}), \
+             patch.object(root_scout,"run_case",side_effect=self.runner),patch.object(root_scout.OpenAICompatible,"ask",new=ask):
+            state=root_scout.diagnose(self.req,strategy="one_shot")
+        self.assertEqual(len(calls),1)
+        self.assertIsNone(state["action_repair"])
+        self.assertEqual(state["stop_reason"],"model_protocol_incomplete")
 
     def test_v2_parse_clarification_preserves_failed_response_and_accounting(self):
         response={"candidates":[{"kind":"defect_candidate","ref":"init","claim":"The zero seed may break all-negative input.","locations":["line 3"]}],"updates":[],"actions":[],"next_question":"Inspect the seed range.","stop":True}
@@ -3028,7 +3194,7 @@ class V2DiscoveryTests(unittest.TestCase):
                 with self.assertRaises(SystemExit) as raised: root_scout.main()
             self.assertEqual(raised.exception.code,1)
 
-    def test_v2_cli_writes_result_json_and_keeps_case_state_without_markdown(self):
+    def test_v2_cli_writes_human_report_and_keeps_json_artifacts(self):
         response={"candidates":[{"kind":"defect_candidate","ref":"init","claim":"possible initialization issue",
                                  "trigger":"negative singleton","locations":["line 3"]}],
                   "updates":[],"actions":[],"next_question":"","stop":True}
@@ -3044,7 +3210,8 @@ class V2DiscoveryTests(unittest.TestCase):
             self.assertEqual(root_scout.verify_saved_case_state(saved),saved)
             self.assertEqual(result["schema_version"],"rootscout.result.v2")
             self.assertTrue((out/"probe.json").exists())
-            self.assertFalse((out/"report.md").exists())
+            self.assertTrue((out/"report.md").exists())
+            self.assertIn("possible initialization issue",(out/"report.md").read_text(encoding="utf-8"))
             self.assertTrue((out/"case_state.json").exists())
 
     def test_legacy_cli_delivery_still_writes_markdown(self):
