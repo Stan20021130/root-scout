@@ -11,7 +11,7 @@ from unittest.mock import patch
 import root_scout
 
 HERE = pathlib.Path(__file__).resolve().parent
-REPO = next((p for p in (HERE, *HERE.parents) if (p / "validation/bash-full40-v1").is_dir()), HERE)
+REPO = next((p for p in (HERE, *HERE.parents) if (p / "validation/bash-full40-v1").is_dir()), HERE.parent)
 BASELINE_FILE = REPO / "validation/context-compaction-v1/baseline/root_scout.py"
 if not BASELINE_FILE.is_file():
     raise unittest.SkipTest(f"Historical context-compaction baseline not installed: {BASELINE_FILE}")

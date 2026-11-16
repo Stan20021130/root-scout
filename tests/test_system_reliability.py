@@ -155,7 +155,7 @@ class ConclusionReviewTests(unittest.TestCase):
 
 class NativeConclusionReviewTests(unittest.TestCase):
     def test_delta_feedback_and_real_history_shape_reach_a_terminal_review(self):
-        native=Path(__file__).resolve().parent/"validation/system-reliability-v1/native"
+        native=Path(__file__).resolve().parent.parent/"validation/system-reliability-v1/native"
         if not (native/"native_adapter.py").is_file():
             self.skipTest(f"Historical native adapter not installed: {native}")
         sys.path.insert(0,str(native))

@@ -168,7 +168,7 @@ class ProtocolDeliveryTests(unittest.TestCase):
         self.assertEqual(len(state["tool_actions"]),7)
 
     def test_content_diagnostic_json_without_tool_call_is_synthesized_into_tool_step(self):
-        folder=Path(__file__).resolve().parent/"validation/protocol-delivery-v1/native"
+        folder=Path(__file__).resolve().parent.parent/"validation/protocol-delivery-v1/native"
         if not (folder/"native_adapter.py").is_file():
             self.skipTest(f"Historical native adapter not installed: {folder}")
         sys_path=list(sys.path)
@@ -200,7 +200,7 @@ class ProtocolDeliveryTests(unittest.TestCase):
             sys.path[:]=sys_path
 
     def test_native_adapter_uses_nested_schema_and_preserves_original_wire_arguments(self):
-        folder=Path(__file__).resolve().parent/"validation/protocol-delivery-v1/native"
+        folder=Path(__file__).resolve().parent.parent/"validation/protocol-delivery-v1/native"
         if not (folder/"native_adapter.py").is_file():
             self.skipTest(f"Historical native adapter not installed: {folder}")
         sys_path=list(sys.path)

@@ -1,6 +1,6 @@
 # 历史实现说明（2026-11-01 Probe 改造前）
 
-本文保留旧数据集与实验记录，不代表当前 MCP 的权限、报告或质量承诺。当前入口请阅读 [README.md](README.md) 和 [README_MCP.md](README_MCP.md)。
+本文保留旧数据集与实验记录，不代表当前 MCP 的权限、报告或质量承诺。当前入口请阅读 [README.md](../README.md)；MCP 服务已废弃。
 
 # root-scout（设计 2.0：候选—工具动作有界探索）
 
@@ -35,7 +35,7 @@ Doctor 检查 Docker daemon、镜像实际存在性、固定镜像 ID 和镜像�
 
 ## 请求格式
 
-请求 JSON 需要 `statement`、`source` 和 `language`。可选 `environment`、`known_failing_tests`；每个测试须含 `input`、`expected`、`trusted: true`、`expected_source`、`legal_input: true` 和 `legal_input_source`。调用方必须为期望输出和输入合法性负责：模型生成的 expected 不会被当作可信 Oracle。系统也会从题面中紧邻“样例输入/样例输出”标题的围栏代码块抽取成对样例，并保存各自原文出处。模型定向探针没有可信 expected，只用于暴露行为，不能独立确认根因。示例：[examples/prefix_overflow.json](examples/prefix_overflow.json)。
+请求 JSON 需要 `statement`、`source` 和 `language`。可选 `environment`、`known_failing_tests`；每个测试须含 `input`、`expected`、`trusted: true`、`expected_source`、`legal_input: true` 和 `legal_input_source`。调用方必须为期望输出和输入合法性负责：模型生成的 expected 不会被当作可信 Oracle。系统也会从题面中紧邻“样例输入/样例输出”标题的围栏代码块抽取成对样例，并保存各自原文出处。模型定向探针没有可信 expected，只用于暴露行为，不能独立确认根因。示例：[examples/prefix_overflow.json](../examples/prefix_overflow.json)。
 
 ## 运行
 
@@ -142,7 +142,7 @@ python -m unittest -v
 
 新增两种工具的请求仍须由调用方提供完整题面SHA和精确引文：XOR契约同时绑定题面中的 `n` 与元素值域引文，Two Sorts绑定排序语义与 `n` 范围。契约审定标记是调用方声明，不是Oracle自动证明题意；模型不得给出expected或Oracle代码。域外输入保持 `UNKNOWN`。旧快照中的历史Oracle实现哈希按Oracle种类限制在重放兼容清单中（仅旧 `range_sum.v1`、`max.v1`、`range_min.v1`）；不得把旧哈希用于新增工具。新证据始终记录当前实现哈希。
 
-小型审定夹具索引见 [`validation/oracle-expansion-v1/reviewed-fixtures.json`](validation/oracle-expansion-v1/reviewed-fixtures.json)。它包含一个有限域 max 初始化触发、两种新增Oracle的独立算法校验样例，以及034/083/042/033/124五题的AI辅助源码/触发审查与历史证据指针。历史模型主张不是根因金标；有限样例和工具自检也不证明根因集合穷尽或性能达标。 八例一次性模型探针的请求、逐题结果、预检和费用限制见 [`validation/oracle-expansion-v1/acceptance-v1/live/report.md`](validation/oracle-expansion-v1/acceptance-v1/live/report.md)；该探针不是根因准确率评测。
+小型审定夹具索引见 [`validation/oracle-expansion-v1/reviewed-fixtures.json`](../validation/oracle-expansion-v1/reviewed-fixtures.json)。它包含一个有限域 max 初始化触发、两种新增Oracle的独立算法校验样例，以及034/083/042/033/124五题的AI辅助源码/触发审查与历史证据指针。历史模型主张不是根因金标；有限样例和工具自检也不证明根因集合穷尽或性能达标。 八例一次性模型探针的请求、逐题结果、预检和费用限制见 [`validation/oracle-expansion-v1/acceptance-v1/live/report.md`](../validation/oracle-expansion-v1/acceptance-v1/live/report.md)；该探针不是根因准确率评测。
 
 Oracle 来源记为 `builtin_oracle:<kind>`。E2 门控和 CaseState 重放都会调用 validator 重新检查输入合法性、expected、契约绑定、Oracle 版本及实现文件哈希；不靠 `trusted: true` 字段授权。请求中的 `caller_attested` 是调用方声明，哈希只绑定题面版本，不能证明调用方声明真实或语义等价；结论依赖其审定。模型不能创建或修改 Oracle，也不能将自己生成的 expected 晋级为可信。
 
@@ -192,8 +192,8 @@ python -m unittest -v
 
 2026-10-31，当前实验库对至少隔一轮的长Bash命令采用按需读取：提示保留用途、状态、结果和原文哈希，完整命令可从只读 `/work/history/Axxxx/command.sh` 获取，stdin在同目录 `stdin.txt`。首轮、最近一轮、题面、源码选择、候选及观察结果保持原展示。净字节收益不足时回退原格式。完整CaseState保留原文。
 
-149个历史请求离线回放中，后续user内容减少6.68%，全部HTTP请求体减少2.41%；这不是实测Token或推理节省。177项检查通过，并完成一次本地只读容器冒烟，无模型API调用。详见 [上下文改动报告](validation/context-compaction-v1/report.md)。生产目录 `F:/AI-Tools/root-scout` 保持 `bdc54e3b`。
+149个历史请求离线回放中，后续user内容减少6.68%，全部HTTP请求体减少2.41%；这不是实测Token或推理节省。177项检查通过，并完成一次本地只读容器冒烟，无模型API调用。详见 [上下文改动报告](../validation/context-compaction-v1/report.md)。生产目录 `F:/AI-Tools/root-scout` 保持 `bdc54e3b`。
 
-2026-10-31，进一步把提示中的稳定字段、观察和工具历史排到版本摘要、候选与轮次之前，提高相同前缀的可复用性。149个历史请求的JSON值和UTF-8字节总量不变；95个后续分析请求的相同user前缀字节合计增加16.89%，实际缓存命中与费用尚未在线验证。历史Bash完整批次已观察到54.98%的输入缓存命中率。详见 [缓存前缀报告](validation/cache-prefix-v1/report.md)。
+2026-10-31，进一步把提示中的稳定字段、观察和工具历史排到版本摘要、候选与轮次之前，提高相同前缀的可复用性。149个历史请求的JSON值和UTF-8字节总量不变；95个后续分析请求的相同user前缀字节合计增加16.89%，实际缓存命中与费用尚未在线验证。历史Bash完整批次已观察到54.98%的输入缓存命中率。详见 [缓存前缀报告](../validation/cache-prefix-v1/report.md)。
 
-同日修正每题稳定的 `X-Conversation-Id`、DSML 命令/stdin 中竖线和空白丢失，以及命名动作数组重复读取。183项检查和一次本地Docker夹具通过。代理当前只有1个账号，固定会话没有已证实的当前缓存或费用收益，因此未发付费A/B请求。详见 [会话与DSML验证](validation/session-affinity-dsml-v1/report.md)。
+同日修正每题稳定的 `X-Conversation-Id`、DSML 命令/stdin 中竖线和空白丢失，以及命名动作数组重复读取。183项检查和一次本地Docker夹具通过。代理当前只有1个账号，固定会话没有已证实的当前缓存或费用收益，因此未发付费A/B请求。详见 [会话与DSML验证](../validation/session-affinity-dsml-v1/report.md)。

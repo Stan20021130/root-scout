@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 
-RUNNER = Path(__file__).with_name("experiments") / "2026-11-10-paired-v2" / "run.py"
+RUNNER = Path(__file__).resolve().parent.parent / "experiments" / "2026-11-10-paired-v2" / "run.py"
 spec = importlib.util.spec_from_file_location("paired_experiment_runner_test", RUNNER)
 runner = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(runner)

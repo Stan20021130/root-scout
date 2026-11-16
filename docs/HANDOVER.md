@@ -206,14 +206,13 @@ ROOT_SCOUT_TRACE_DIR=<可选：落盘原始 reasoning 与请求>
 ## 9. 测试
 
 ```powershell
-python -m pytest test_root_scout.py test_protocol_delivery.py test_delivery_boundaries.py `
-  test_context_compaction.py test_evaluation.py test_focused_prompt.py test_repo_tasks.py `
-  test_session_affinity_dsml.py test_system_reliability.py -q      # 243 passed / 10 skipped
+python -m pytest -q
 
-$env:ROOT_SCOUT_INTEGRATION=1; python -m pytest test_sandbox_integration.py -q   # 需要 Docker
+$env:ROOT_SCOUT_INTEGRATION=1; python -m pytest tests/test_sandbox_integration.py -q   # 需要 Docker
+Remove-Item Env:ROOT_SCOUT_INTEGRATION
 ```
 
-`test_evidence_probe.py` 依赖缺失的 `mcp_server.py`，**无法运行**，属于已知状态。
+本节原记录的 243 passed / 10 skipped 是历史结果；当前测试和依赖说明见项目 README。
 
 ---
 

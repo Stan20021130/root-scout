@@ -2470,7 +2470,7 @@ class V2DiscoveryTests(unittest.TestCase):
         self.assertEqual(cfg["output_policy"],"adaptive")
         self.assertEqual(cfg["phase_output_tokens"]["EXPLORE_V2"],None)
         self.assertEqual(cfg["provider_output_ceiling"],128000)
-        launcher=pathlib.Path(__file__).with_name("run-local.ps1").read_text(encoding="utf-8")
+        launcher=(pathlib.Path(__file__).resolve().parent.parent/"run-local.ps1").read_text(encoding="utf-8")
         self.assertIn("$env:ROOT_SCOUT_MAX_TOKENS = $null",launcher)
         self.assertIn("$env:ROOT_SCOUT_MAX_OUTPUT_TOKENS = $null",launcher)
         with patch.dict(os.environ,{"ROOT_SCOUT_OUTPUT_POLICY":"adaptive","ROOT_SCOUT_MAX_TOKENS":"96000","OPENAI_MODEL":"fixture","OPENAI_API_KEY":"test-only"},clear=True), \
@@ -2845,7 +2845,7 @@ class V2DiscoveryTests(unittest.TestCase):
             cfg=root_scout.model_budget_configuration()
             self.assertEqual(cfg["output_policy"],"fixed")
             self.assertEqual(cfg["phase_output_tokens"]["EXPLORE_V2"],20000)
-        launcher=pathlib.Path(__file__).with_name("run-local.ps1").read_text(encoding="utf-8")
+        launcher=(pathlib.Path(__file__).resolve().parent.parent/"run-local.ps1").read_text(encoding="utf-8")
         self.assertIn("$env:ROOT_SCOUT_MAX_TOKENS = $null",launcher)
         self.assertIn("$env:ROOT_SCOUT_MAX_OUTPUT_TOKENS = $null",launcher)
         self.assertIn("$env:ROOT_SCOUT_MAX_OUTPUT_TOKENS_EXPLORE_V2 = $null",launcher)

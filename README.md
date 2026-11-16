@@ -10,6 +10,13 @@ RootScout 嵌入 Agent 开发流水线，负责构造合法域内的对抗测试
 2. **多文件仓库与 Git 变更**：`repo_tasks.py` 提供有限的符号、测试引用和 Diff 文本规则分析。结果是待复核线索，无法证明覆盖率、业务正确性或安全性。
 控制器使用 Python 3.11+ 标准库。MCP 服务已废弃，目前使用 CLI 和 Python 模块。
 
+## 项目目录
+
+- 根目录：CLI 入口、运行时模块、评测脚本及数据集。
+- `tests/`：项目测试；`examples/`：请求示例；`prompts/`：提示词。
+- `docs/`：交接、设计和历史文档；`experiments/`：实验记录与复算材料。
+- `snapshots/`：历史版本和备份；`validation/`：本地验证数据，不纳入 Git。
+
 ## 工作流
 
 1. 固定需求、原始源码、语言、可信测试及其来源。
@@ -167,7 +174,7 @@ python root_scout.py diagnose examples/probe_max.json --strategy one_shot --out 
 
 内建 Oracle 仅覆盖经过显式调用方契约审定的五类题型：range_sum.v1、range_min.v1、max.v1、increasing_xor.v1、two_sorts.v1。超出已配置工具域时保持未知。当前没有通用可信 Oracle、反例最小性证明、独立语义裁决、完整根因集证明或通用性能认证。
 
-legacy 引擎和旧 CaseState 重放继续保留，CLI 默认使用 v2。历史数据集、实验成本和旧机制细节见 [README_LEGACY.md](README_LEGACY.md)，不作为本版本质量承诺。
+legacy 引擎和旧 CaseState 重放继续保留，CLI 默认使用 v2。历史数据集、实验成本和旧机制细节见 [历史说明](docs/README_LEGACY.md)，不作为本版本质量承诺。
 
 ## 离线质量与成本基线
 
@@ -205,4 +212,4 @@ python -m pytest -q
 Remove-Item Env:ROOT_SCOUT_INTEGRATION
 ~~~
 
-运行项目测试需要 pytest；默认排除 `validation/` 和 `demo_apps/` 等独立实验目录。部分测试依赖未纳入 Git 的 `validation/` 夹具；迁移仓库时需要一并保存。废弃 MCP 服务的历史检查会跳过。Docker 集成验证使用固定的模型响应夹具，不调用付费模型，不能代替真实模型诊断质量评测。
+运行项目测试需要 pytest；默认收集 `tests/` 中的测试。部分测试依赖未纳入 Git 的 `validation/` 夹具；迁移仓库时需要一并保存。废弃 MCP 服务的历史检查会跳过。Docker 集成验证使用固定的模型响应夹具，不调用付费模型，不能代替真实模型诊断质量评测。
